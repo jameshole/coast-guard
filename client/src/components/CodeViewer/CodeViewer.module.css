@@ -29,6 +29,25 @@
   background: var(--diff-remove-bg);
 }
 
+/* Removed line styling */
+.removedLine {
+  opacity: 0.8;
+}
+
+.removedLine .lineContent {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-muted);
+}
+
+.oldLineNumber {
+  color: var(--diff-unstaged-remove);
+  font-style: italic;
+}
+
+.removedContent {
+  color: var(--text-secondary);
+}
+
 .gutter {
   width: 20px;
   padding: 0 2px;

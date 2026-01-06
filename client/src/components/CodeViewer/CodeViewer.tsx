@@ -3,7 +3,18 @@ import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki
 import { useFileContent } from '../../hooks/useFileContent';
 import { useFileDiff } from '../../hooks/useGitStatus';
 import { DiffGutter } from './DiffGutter';
+import type { LineDiff } from '../../types';
 import styles from './CodeViewer.module.css';
+
+// A display line can be either from the current file or a removed line from diff
+interface DisplayLine {
+  type: 'current' | 'removed';
+  content: string; // HTML content for current lines, plain text for removed
+  newLineNumber: number | null; // Line number in current file (null for removed)
+  oldLineNumber: number | null; // Line number in old file (for removed lines)
+  diffType: 'add' | 'remove' | null;
+  isStaged: boolean;
+}
 
 interface CodeViewerProps {
   filePath: string | null;
@@ -109,26 +120,117 @@ export function CodeViewer({ filePath }: CodeViewerProps) {
   const content = fileData?.content || '';
   const language = filePath ? detectLanguage(filePath) : 'plaintext';
 
-  // Calculate which lines have changes
-  const lineDiffMap = useMemo(() => {
-    const map: Record<number, { type: 'add' | 'remove'; isStaged: boolean }> = {};
+  // Build merged display lines including removed lines from diff
+  const displayLines = useMemo(() => {
+    const lines: DisplayLine[] = [];
 
-    if (diffData?.staged) {
-      for (const lineNum of diffData.staged.additions) {
-        map[lineNum] = { type: 'add', isStaged: true };
-      }
-    }
+    // Build a map of additions (line numbers that were added)
+    const additionsMap: Record<number, { isStaged: boolean }> = {};
 
-    if (diffData?.unstaged) {
-      for (const lineNum of diffData.unstaged.additions) {
-        if (!map[lineNum]) {
-          map[lineNum] = { type: 'add', isStaged: false };
+    // Build a map of removed lines to insert before each new line number
+    // Key: new line number where removed lines should appear before
+    // Value: array of removed lines with their old line numbers
+    const removedLinesMap: Map<number, Array<{ oldLineNumber: number; content: string; isStaged: boolean }>> = new Map();
+
+    // Process diff hunks to extract removed lines and additions
+    const processHunks = (hunks: LineDiff[][], isStaged: boolean) => {
+      for (const hunk of hunks) {
+        let pendingRemovals: Array<{ oldLineNumber: number; content: string; isStaged: boolean }> = [];
+        let insertBeforeLine: number | null = null;
+
+        for (const line of hunk) {
+          if (line.type === 'remove') {
+            pendingRemovals.push({
+              oldLineNumber: line.lineNumber,
+              content: line.content,
+              isStaged,
+            });
+          } else if (line.type === 'add') {
+            // Additions - record the line number
+            if (!additionsMap[line.lineNumber]) {
+              additionsMap[line.lineNumber] = { isStaged };
+            }
+            // If we have pending removals, they should appear before this added line
+            if (pendingRemovals.length > 0 && insertBeforeLine === null) {
+              insertBeforeLine = line.lineNumber;
+            }
+          } else if (line.type === 'context') {
+            // Context line - if we have pending removals, they appear before this line
+            if (pendingRemovals.length > 0 && insertBeforeLine === null) {
+              insertBeforeLine = line.lineNumber;
+            }
+          }
+        }
+
+        // Insert pending removals
+        if (pendingRemovals.length > 0 && insertBeforeLine !== null) {
+          const existing = removedLinesMap.get(insertBeforeLine) || [];
+          removedLinesMap.set(insertBeforeLine, [...existing, ...pendingRemovals]);
+        } else if (pendingRemovals.length > 0) {
+          // Removals at end of file - insert after last line
+          const lastLineNum = highlightedLines.length + 1;
+          const existing = removedLinesMap.get(lastLineNum) || [];
+          removedLinesMap.set(lastLineNum, [...existing, ...pendingRemovals]);
         }
       }
+    };
+
+    if (diffData?.staged?.hunks) {
+      processHunks(diffData.staged.hunks, true);
+    }
+    if (diffData?.unstaged?.hunks) {
+      processHunks(diffData.unstaged.hunks, false);
     }
 
-    return map;
-  }, [diffData]);
+    // Build the display lines array
+    for (let i = 0; i < highlightedLines.length; i++) {
+      const lineNum = i + 1;
+
+      // First, insert any removed lines that should appear before this line
+      const removedBefore = removedLinesMap.get(lineNum);
+      if (removedBefore) {
+        for (const removed of removedBefore) {
+          lines.push({
+            type: 'removed',
+            content: removed.content,
+            newLineNumber: null,
+            oldLineNumber: removed.oldLineNumber,
+            diffType: 'remove',
+            isStaged: removed.isStaged,
+          });
+        }
+      }
+
+      // Then add the current line
+      const addition = additionsMap[lineNum];
+      lines.push({
+        type: 'current',
+        content: highlightedLines[i],
+        newLineNumber: lineNum,
+        oldLineNumber: null,
+        diffType: addition ? 'add' : null,
+        isStaged: addition?.isStaged || false,
+      });
+    }
+
+    // Handle removed lines at the very end of the file
+    const afterLastLine = highlightedLines.length + 1;
+    const removedAtEnd = removedLinesMap.get(afterLastLine);
+    if (removedAtEnd) {
+      for (const removed of removedAtEnd) {
+        lines.push({
+          type: 'removed',
+          content: removed.content,
+          newLineNumber: null,
+          oldLineNumber: removed.oldLineNumber,
+          diffType: 'remove',
+          isStaged: removed.isStaged,
+        });
+      }
+    }
+
+    return lines;
+  }, [highlightedLines, diffData]);
 
   useEffect(() => {
     if (!content) {
@@ -197,22 +299,29 @@ export function CodeViewer({ filePath }: CodeViewerProps) {
       <div className={styles.codeWrapper}>
         <table className={styles.codeTable}>
           <tbody>
-            {highlightedLines.map((lineHtml, index) => {
-              const lineNum = index + 1;
-              const diff = lineDiffMap[lineNum];
+            {displayLines.map((line, index) => {
+              const diffInfo = line.diffType
+                ? { type: line.diffType, isStaged: line.isStaged }
+                : undefined;
+
+              const isRemoved = line.type === 'removed';
 
               return (
                 <tr
                   key={index}
-                  className={`${styles.line} ${diff ? styles[`diff-${diff.type}`] : ''}`}
+                  className={`${styles.line} ${line.diffType ? styles[`diff-${line.diffType}`] : ''} ${isRemoved ? styles.removedLine : ''}`}
                 >
                   <td className={styles.gutter}>
-                    <DiffGutter diff={diff} />
+                    <DiffGutter diff={diffInfo} />
                   </td>
-                  <td className={styles.lineNumber}>{lineNum}</td>
+                  <td className={`${styles.lineNumber} ${isRemoved ? styles.oldLineNumber : ''}`}>
+                    {isRemoved ? line.oldLineNumber : line.newLineNumber}
+                  </td>
                   <td
-                    className={styles.lineContent}
-                    dangerouslySetInnerHTML={{ __html: lineHtml || '&nbsp;' }}
+                    className={`${styles.lineContent} ${isRemoved ? styles.removedContent : ''}`}
+                    dangerouslySetInnerHTML={{
+                      __html: isRemoved ? escapeHtml(line.content) : (line.content || '&nbsp;'),
+                    }}
                   />
                 </tr>
               );
