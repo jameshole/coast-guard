@@ -78,8 +78,6 @@
 .fileName {
   font-size: 13px;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
 }
