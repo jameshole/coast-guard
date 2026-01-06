@@ -10,6 +10,7 @@ import styles from './CodeViewer.module.css';
 interface DisplayLine {
   type: 'current' | 'removed';
   content: string; // HTML content for current lines, plain text for removed
+  highlightKey?: string; // Key for looking up highlighted content (for removed lines)
   newLineNumber: number | null; // Line number in current file (null for removed)
   oldLineNumber: number | null; // Line number in old file (for removed lines)
   diffType: 'add' | 'remove' | null;
@@ -115,6 +116,7 @@ export function CodeViewer({ filePath }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const { data: diffData } = useFileDiff(filePath);
   const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
+  const [highlightedRemovedLines, setHighlightedRemovedLines] = useState<Map<string, string>>(new Map());
   const [isHighlighting, setIsHighlighting] = useState(false);
 
   const content = fileData?.content || '';
@@ -193,6 +195,7 @@ export function CodeViewer({ filePath }: CodeViewerProps) {
           lines.push({
             type: 'removed',
             content: removed.content,
+            highlightKey: `${removed.isStaged ? 's' : 'u'}-${removed.oldLineNumber}`,
             newLineNumber: null,
             oldLineNumber: removed.oldLineNumber,
             diffType: 'remove',
@@ -221,6 +224,7 @@ export function CodeViewer({ filePath }: CodeViewerProps) {
         lines.push({
           type: 'removed',
           content: removed.content,
+          highlightKey: `${removed.isStaged ? 's' : 'u'}-${removed.oldLineNumber}`,
           newLineNumber: null,
           oldLineNumber: removed.oldLineNumber,
           diffType: 'remove',
@@ -270,6 +274,69 @@ export function CodeViewer({ filePath }: CodeViewerProps) {
       });
   }, [content, language]);
 
+  // Highlight removed lines from diff
+  useEffect(() => {
+    if (!diffData) {
+      setHighlightedRemovedLines(new Map());
+      return;
+    }
+
+    // Collect all removed lines from hunks
+    const removedLines: Array<{ key: string; content: string }> = [];
+
+    const extractRemovedLines = (hunks: LineDiff[][], isStaged: boolean) => {
+      for (const hunk of hunks) {
+        for (const line of hunk) {
+          if (line.type === 'remove') {
+            // Use a unique key combining staged status and line number
+            const key = `${isStaged ? 's' : 'u'}-${line.lineNumber}`;
+            removedLines.push({ key, content: line.content });
+          }
+        }
+      }
+    };
+
+    if (diffData.staged?.hunks) {
+      extractRemovedLines(diffData.staged.hunks, true);
+    }
+    if (diffData.unstaged?.hunks) {
+      extractRemovedLines(diffData.unstaged.hunks, false);
+    }
+
+    if (removedLines.length === 0) {
+      setHighlightedRemovedLines(new Map());
+      return;
+    }
+
+    // Highlight all removed lines
+    getHighlighter()
+      .then((highlighter) => {
+        const highlighted = new Map<string, string>();
+
+        for (const { key, content: lineContent } of removedLines) {
+          const tokens = highlighter.codeToTokens(lineContent, {
+            lang: language,
+            theme: 'github-dark',
+          });
+
+          // Convert first line of tokens to HTML (there should only be one line)
+          const html = tokens.tokens[0]
+            ?.map(
+              (token) =>
+                `<span style="color: ${token.color || 'inherit'}">${escapeHtml(token.content)}</span>`
+            )
+            .join('') || escapeHtml(lineContent);
+
+          highlighted.set(key, html);
+        }
+
+        setHighlightedRemovedLines(highlighted);
+      })
+      .catch((err) => {
+        console.error('Highlighting removed lines failed:', err);
+      });
+  }, [diffData, language]);
+
   if (!filePath) {
     return (
       <div className={styles.empty}>
@@ -318,9 +385,11 @@ export function CodeViewer({ filePath }: CodeViewerProps) {
                     {isRemoved ? line.oldLineNumber : line.newLineNumber}
                   </td>
                   <td
-                    className={`${styles.lineContent} ${isRemoved ? styles.removedContent : ''}`}
+                    className={styles.lineContent}
                     dangerouslySetInnerHTML={{
-                      __html: isRemoved ? escapeHtml(line.content) : (line.content || '&nbsp;'),
+                      __html: isRemoved
+                        ? (line.highlightKey && highlightedRemovedLines.get(line.highlightKey)) || escapeHtml(line.content)
+                        : (line.content || '&nbsp;'),
                     }}
                   />
                 </tr>

@@ -31,21 +31,12 @@
 
 /* Removed line styling */
 .removedLine {
-  opacity: 0.8;
-}
-
-.removedLine .lineContent {
-  text-decoration: line-through;
-  text-decoration-color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .oldLineNumber {
   color: var(--diff-unstaged-remove);
   font-style: italic;
-}
-
-.removedContent {
-  color: var(--text-secondary);
 }
 
 .gutter {
