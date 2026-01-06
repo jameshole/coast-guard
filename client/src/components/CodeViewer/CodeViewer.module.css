@@ -1,0 +1,68 @@
+.container {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.codeWrapper {
+  min-width: fit-content;
+}
+
+.codeTable {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: var(--line-height);
+  width: 100%;
+}
+
+.line {
+  height: var(--line-height);
+}
+
+/* Diff background highlighting */
+.line.diff-add {
+  background: var(--diff-add-bg);
+}
+
+.line.diff-remove {
+  background: var(--diff-remove-bg);
+}
+
+.gutter {
+  width: 20px;
+  padding: 0 2px;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.lineNumber {
+  width: 50px;
+  padding: 0 12px 0 8px;
+  text-align: right;
+  color: var(--text-muted);
+  user-select: none;
+  vertical-align: top;
+}
+
+.lineContent {
+  padding: 0 16px 0 8px;
+  white-space: pre;
+  vertical-align: top;
+}
+
+/* Empty state */
+.empty,
+.loading,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.error {
+  color: var(--diff-staged-remove);
+}

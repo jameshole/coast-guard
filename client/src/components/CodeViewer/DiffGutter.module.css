@@ -1,0 +1,27 @@
+.empty {
+  width: 16px;
+  display: inline-block;
+}
+
+.indicator {
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stagedAdd {
+  color: var(--diff-staged-add);
+}
+
+.stagedRemove {
+  color: var(--diff-staged-remove);
+}
+
+.unstagedAdd {
+  color: var(--diff-unstaged-add);
+}
+
+.unstagedRemove {
+  color: var(--diff-unstaged-remove);
+}

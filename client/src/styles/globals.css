@@ -1,0 +1,117 @@
+/* VS Code Dark+ inspired theme */
+:root {
+  /* Backgrounds */
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d2d;
+  --bg-hover: #2a2d2e;
+  --bg-selected: #094771;
+  --bg-active: #37373d;
+
+  /* Text */
+  --text-primary: #d4d4d4;
+  --text-secondary: #808080;
+  --text-muted: #6a737d;
+  --text-accent: #4fc1ff;
+
+  /* Borders */
+  --border-color: #3c3c3c;
+  --border-subtle: #2d2d2d;
+
+  /* Scrollbar */
+  --scrollbar-thumb: #424242;
+  --scrollbar-track: transparent;
+
+  /* Git diff colors - gutter markers */
+  --diff-staged-add: #2ea043;
+  --diff-staged-remove: #f85149;
+  --diff-unstaged-add: #238636;
+  --diff-unstaged-remove: #da3633;
+
+  /* Git diff colors - line backgrounds */
+  --diff-add-bg: rgba(46, 160, 67, 0.15);
+  --diff-remove-bg: rgba(248, 81, 73, 0.15);
+
+  /* Git file status colors */
+  --git-modified: #e2c08d;
+  --git-staged: #73c991;
+  --git-untracked: #73c991;
+
+  /* Syntax highlighting is handled by Shiki theme */
+
+  /* Fonts */
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Sizing */
+  --sidebar-width: 260px;
+  --header-height: 40px;
+  --line-height: 20px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  line-height: 1.4;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Selection */
+::selection {
+  background: var(--bg-selected);
+}
+
+/* Code */
+code, pre {
+  font-family: var(--font-mono);
+}
+
+/* Button reset */
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+/* Links */
+a {
+  color: var(--text-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

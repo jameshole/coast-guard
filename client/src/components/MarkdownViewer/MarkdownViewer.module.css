@@ -1,0 +1,173 @@
+.container {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.article {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 48px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* Headings */
+.article h1,
+.article h2,
+.article h3,
+.article h4,
+.article h5,
+.article h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.article h1 {
+  font-size: 2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.article h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.article h3 {
+  font-size: 1.25em;
+}
+
+.article h4 {
+  font-size: 1em;
+}
+
+/* Paragraphs */
+.article p {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+/* Links */
+.article a {
+  color: var(--text-accent);
+  text-decoration: none;
+}
+
+.article a:hover {
+  text-decoration: underline;
+}
+
+/* Lists */
+.article ul,
+.article ol {
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding-left: 2em;
+}
+
+.article li {
+  margin-bottom: 4px;
+}
+
+.article li + li {
+  margin-top: 4px;
+}
+
+/* Blockquotes */
+.article blockquote {
+  margin: 0 0 16px 0;
+  padding: 0 1em;
+  color: var(--text-secondary);
+  border-left: 4px solid var(--border-color);
+}
+
+/* Code */
+.inlineCode {
+  padding: 0.2em 0.4em;
+  font-size: 85%;
+  font-family: var(--font-mono);
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.codeBlock {
+  margin: 16px 0;
+  padding: 16px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.45;
+  background: var(--bg-secondary) !important;
+  border-radius: 6px;
+}
+
+.codeBlock pre {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+}
+
+.codeBlock code {
+  font-family: var(--font-mono);
+}
+
+/* Tables */
+.article table {
+  margin: 16px 0;
+  border-collapse: collapse;
+  width: 100%;
+  overflow: auto;
+}
+
+.article th,
+.article td {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+}
+
+.article th {
+  font-weight: 600;
+  background: var(--bg-secondary);
+}
+
+.article tr:nth-child(even) {
+  background: var(--bg-tertiary);
+}
+
+/* Horizontal rule */
+.article hr {
+  height: 1px;
+  margin: 24px 0;
+  background: var(--border-color);
+  border: none;
+}
+
+/* Images */
+.article img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* Task lists */
+.article input[type='checkbox'] {
+  margin-right: 8px;
+}
+
+/* Loading/Error states */
+.loading,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.error {
+  color: var(--diff-staged-remove);
+}

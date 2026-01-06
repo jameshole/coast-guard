@@ -1,0 +1,34 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  height: 100%;
+  background: var(--bg-secondary);
+  overflow: auto;
+}
+
+.main {
+  height: 100%;
+  background: var(--bg-primary);
+  overflow: auto;
+}
+
+.resizeHandle {
+  width: 4px;
+  background: var(--border-color);
+  transition: background 0.15s ease;
+}
+
+.resizeHandle:hover,
+.resizeHandle[data-resize-handle-active] {
+  background: var(--text-accent);
+}
