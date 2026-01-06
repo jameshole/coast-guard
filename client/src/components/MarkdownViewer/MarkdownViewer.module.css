@@ -154,6 +154,11 @@
 }
 
 /* Task lists */
+.article li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -1.5em;
+}
+
 .article input[type='checkbox'] {
   margin-right: 8px;
 }
