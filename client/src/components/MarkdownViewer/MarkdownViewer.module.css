@@ -160,7 +160,33 @@
 }
 
 .article input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
   margin-right: 8px;
+  border: 2px solid #6e7681;
+  border-radius: 3px;
+  background-color: transparent;
+  vertical-align: middle;
+  position: relative;
+  cursor: default;
+}
+
+.article input[type='checkbox']:checked {
+  background-color: #2ea043;
+  border-color: #2ea043;
+}
+
+.article input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: -1px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 /* Loading/Error states */
