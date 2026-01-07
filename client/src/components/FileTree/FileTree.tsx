@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Tree, NodeRendererProps, NodeApi } from 'react-arborist';
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
+import { Tree, NodeRendererProps, NodeApi, TreeApi } from 'react-arborist';
 import { ChevronRight, ChevronDown, Circle } from 'lucide-react';
 import { useFileTree } from '../../hooks/useFileTree';
 import { useChangedFiles } from '../../hooks/useGitStatus';
@@ -65,6 +65,10 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
 
 export function FileTree({ onFileSelect, selectedFile }: FileTreeProps) {
   const [childrenCache, setChildrenCache] = useState<Record<string, FileNode[]>>({});
+  const childrenCacheRef = useRef(childrenCache);
+  childrenCacheRef.current = childrenCache;
+  const treeRef = useRef<TreeApi<TreeNode> | null>(null);
+  const lastExpandedFile = useRef<string | null>(null);
 
   // Fetch root level
   const { data: rootNodes, isLoading: rootLoading } = useFileTree('');
@@ -146,6 +150,73 @@ export function FileTree({ onFileSelect, selectedFile }: FileTreeProps) {
     }
   }, [onFileSelect]);
 
+  // Expand parent directories when a file is selected (e.g., from command palette)
+  useEffect(() => {
+    if (!selectedFile) return;
+    if (lastExpandedFile.current === selectedFile) return;
+
+    // Get all parent directory paths
+    const parts = selectedFile.split('/');
+    const parentPaths: string[] = [];
+    for (let i = 1; i < parts.length; i++) {
+      parentPaths.push(parts.slice(0, i).join('/'));
+    }
+
+    let cancelled = false;
+
+    const expandPath = async () => {
+      // Process each parent directory sequentially
+      for (const parentPath of parentPaths) {
+        if (cancelled) return;
+
+        // First ensure the data is cached
+        if (!childrenCacheRef.current[parentPath]) {
+          try {
+            const response = await fetch(
+              `/api/files/tree?path=${encodeURIComponent(parentPath)}&depth=1`
+            );
+            const children = await response.json();
+            setChildrenCache((prev) => ({ ...prev, [parentPath]: children }));
+            // Wait for React to process the state update
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          } catch (error) {
+            console.error('Failed to load children for', parentPath, error);
+            return;
+          }
+        }
+
+        // Wait for the node to be available in the tree, then open it
+        let attempts = 0;
+        while (attempts < 20 && !cancelled) {
+          if (treeRef.current) {
+            const node = treeRef.current.get(parentPath);
+            if (node) {
+              if (!node.isOpen) {
+                node.open();
+                // Wait for the tree to process the open
+                await new Promise((resolve) => setTimeout(resolve, 50));
+              }
+              break;
+            }
+          }
+          attempts++;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      }
+
+      if (!cancelled) {
+        lastExpandedFile.current = selectedFile;
+      }
+    };
+
+    expandPath();
+
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFile]);
+
   if (rootLoading) {
     return (
       <div className={styles.loading}>
@@ -156,10 +227,8 @@ export function FileTree({ onFileSelect, selectedFile }: FileTreeProps) {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <span>EXPLORER</span>
-      </div>
       <Tree
+        ref={treeRef}
         data={treeData}
         openByDefault={false}
         width="100%"

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/Layout';
-import { FileTree } from './components/FileTree';
+import { Sidebar } from './components/Sidebar';
 import { CodeViewer } from './components/CodeViewer';
 import { MarkdownViewer } from './components/MarkdownViewer';
 import { CommandPalette } from './components/CommandPalette';
@@ -62,7 +62,7 @@ function AppContent() {
     <>
       <Layout
         sidebar={
-          <FileTree onFileSelect={handleFileSelect} selectedFile={selectedFile} />
+          <Sidebar onFileSelect={handleFileSelect} selectedFile={selectedFile} />
         }
         main={renderMainContent()}
         currentFile={selectedFile}
