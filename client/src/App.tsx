@@ -5,6 +5,7 @@ import { FileTree } from './components/FileTree';
 import { CodeViewer } from './components/CodeViewer';
 import { MarkdownViewer } from './components/MarkdownViewer';
 import { CommandPalette } from './components/CommandPalette';
+import { useFileWatcher } from './hooks/useFileWatcher';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,9 @@ function isMarkdownFile(path: string): boolean {
 function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Connect to file watcher for live updates
+  useFileWatcher(selectedFile);
 
   const handleFileSelect = useCallback((path: string) => {
     setSelectedFile(path);
