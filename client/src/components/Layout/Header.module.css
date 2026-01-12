@@ -66,3 +66,37 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.diffNav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 8px;
+}
+
+.diffNavButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.diffNavButton:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.diffCount {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 32px;
+  text-align: center;
+}
