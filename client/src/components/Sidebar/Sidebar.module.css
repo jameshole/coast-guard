@@ -1,6 +1,61 @@
 .sidebar {
   display: flex;
-  flex-direction: column;
   height: 100%;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 4px;
+  gap: 4px;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-color);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  background: var(--git-modified);
+  color: var(--bg-primary);
+  border-radius: 8px;
+}
+
+.content {
+  flex: 1;
   overflow: hidden;
 }

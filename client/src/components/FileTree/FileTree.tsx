@@ -68,11 +68,43 @@ export function FileTree({ onFileSelect, selectedFile }: FileTreeProps) {
   const childrenCacheRef = useRef(childrenCache);
   childrenCacheRef.current = childrenCache;
   const treeRef = useRef<TreeApi<TreeNode> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const lastExpandedFile = useRef<string | null>(null);
+  const [treeHeight, setTreeHeight] = useState(500);
 
   // Fetch root level
   const { data: rootNodes, isLoading: rootLoading } = useFileTree('');
   const { data: changedFiles } = useChangedFiles();
+
+  // Measure container height
+  useEffect(() => {
+    let rafId: number;
+
+    const updateHeight = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const newHeight = window.innerHeight - rect.top;
+        if (newHeight > 0) {
+          setTreeHeight(newHeight);
+        }
+      }
+    };
+
+    // Use multiple RAF calls to ensure layout is complete
+    const scheduleUpdate = () => {
+      rafId = requestAnimationFrame(() => {
+        rafId = requestAnimationFrame(updateHeight);
+      });
+    };
+
+    scheduleUpdate();
+    window.addEventListener('resize', updateHeight);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [rootNodes]); // Re-run when data loads
 
   // Fetch children for expanded directories
   const loadChildren = useCallback(async (path: string) => {
@@ -226,19 +258,20 @@ export function FileTree({ onFileSelect, selectedFile }: FileTreeProps) {
   }
 
   return (
-    <div className={styles.container}>
+    <div ref={containerRef} className={styles.container}>
       <Tree
         ref={treeRef}
         data={treeData}
         openByDefault={false}
         width="100%"
-        height={800}
+        height={treeHeight}
         indent={16}
         rowHeight={24}
         overscanCount={5}
         onToggle={handleToggle}
         onSelect={handleSelect}
         selection={selectedFile || undefined}
+        disableMultiSelection
       >
         {Node}
       </Tree>
