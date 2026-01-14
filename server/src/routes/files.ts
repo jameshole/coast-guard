@@ -47,5 +47,23 @@ export function createFilesRouter(fileService: FileService): Router {
     }
   });
 
+  // Toggle markdown checkbox
+  router.put('/checkbox', async (req: Request, res: Response) => {
+    try {
+      const { path: filePath, index } = req.body;
+
+      if (!filePath || typeof index !== 'number') {
+        res.status(400).json({ error: 'Path and index are required' });
+        return;
+      }
+
+      const newContent = await fileService.toggleCheckbox(filePath, index);
+      res.json({ content: newContent });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(400).json({ error: message });
+    }
+  });
+
   return router;
 }

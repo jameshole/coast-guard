@@ -114,6 +114,39 @@ export class FileService {
     }
   }
 
+  async toggleCheckbox(relativePath: string, checkboxIndex: number): Promise<string> {
+    // Only allow markdown files
+    if (!relativePath.endsWith('.md') && !relativePath.endsWith('.markdown')) {
+      throw new Error('Checkbox toggle only supported for markdown files');
+    }
+
+    const absolutePath = this.validatePath(relativePath);
+    const content = await fs.readFile(absolutePath, 'utf-8');
+
+    // Find all checkboxes and toggle the one at the given index
+    const checkboxPattern = /- \[([ xX])\]/g;
+    let currentIndex = 0;
+    let newContent = content;
+
+    newContent = content.replace(checkboxPattern, (match, checkState) => {
+      if (currentIndex === checkboxIndex) {
+        currentIndex++;
+        // Toggle: if checked, uncheck; if unchecked, check
+        const isChecked = checkState.toLowerCase() === 'x';
+        return isChecked ? '- [ ]' : '- [x]';
+      }
+      currentIndex++;
+      return match;
+    });
+
+    if (currentIndex <= checkboxIndex) {
+      throw new Error(`Checkbox index ${checkboxIndex} not found`);
+    }
+
+    await fs.writeFile(absolutePath, newContent, 'utf-8');
+    return newContent;
+  }
+
   async exists(relativePath: string): Promise<boolean> {
     try {
       const absolutePath = this.validatePath(relativePath);

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createHighlighter, type Highlighter } from 'shiki';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFileContent } from '../../hooks/useFileContent';
+import { api } from '../../services/api';
 import styles from './MarkdownViewer.module.css';
 
 interface MarkdownViewerProps {
@@ -81,6 +83,24 @@ function CodeBlock({ className, children }: CodeBlockProps) {
 
 export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
+  const queryClient = useQueryClient();
+  const checkboxIndexRef = useRef(0);
+
+  // Reset checkbox index on each render
+  checkboxIndexRef.current = 0;
+
+  const handleCheckboxClick = useCallback(
+    async (index: number) => {
+      try {
+        await api.toggleCheckbox(filePath, index);
+        // Invalidate the file content query to refetch
+        queryClient.invalidateQueries({ queryKey: ['fileContent', filePath] });
+      } catch (err) {
+        console.error('Failed to toggle checkbox:', err);
+      }
+    },
+    [filePath, queryClient]
+  );
 
   if (isLoading) {
     return (
@@ -123,6 +143,21 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
                   {children}
                 </a>
               );
+            },
+            input({ type, checked, disabled, ...props }) {
+              if (type === 'checkbox') {
+                const currentIndex = checkboxIndexRef.current++;
+                return (
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => handleCheckboxClick(currentIndex)}
+                    className={styles.checkbox}
+                    {...props}
+                  />
+                );
+              }
+              return <input type={type} checked={checked} disabled={disabled} {...props} />;
             },
           }}
         >

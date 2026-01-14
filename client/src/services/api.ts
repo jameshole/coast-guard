@@ -11,6 +11,19 @@ async function fetchJSON<T>(url: string): Promise<T> {
   return response.json();
 }
 
+async function putJSON<T>(url: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${url}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Network error' }));
+    throw new Error(error.error || 'Request failed');
+  }
+  return response.json();
+}
+
 export const api = {
   // Project
   getProjectInfo: (): Promise<ProjectInfo> => fetchJSON('/project'),
@@ -36,4 +49,8 @@ export const api = {
 
   getChangedFiles: (): Promise<Record<string, GitFileStatus>> =>
     fetchJSON('/git/changed-files'),
+
+  // Markdown
+  toggleCheckbox: (path: string, index: number): Promise<{ content: string }> =>
+    putJSON('/files/checkbox', { path, index }),
 };
