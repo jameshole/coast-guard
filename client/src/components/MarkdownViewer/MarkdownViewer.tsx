@@ -38,17 +38,12 @@ async function getHighlighter(): Promise<Highlighter> {
 }
 
 interface CodeBlockProps {
-  className?: string;
-  children?: React.ReactNode;
+  language: string;
+  code: string;
 }
 
-function CodeBlock({ className, children }: CodeBlockProps) {
+function CodeBlock({ language, code }: CodeBlockProps) {
   const [html, setHtml] = useState<string | null>(null);
-
-  // Extract language from className (e.g., "language-typescript")
-  const match = /language-(\w+)/.exec(className || '');
-  const language = match ? match[1] : 'plaintext';
-  const code = String(children).replace(/\n$/, '');
 
   useEffect(() => {
     getHighlighter()
@@ -79,6 +74,13 @@ function CodeBlock({ className, children }: CodeBlockProps) {
       <code>{code}</code>
     </pre>
   );
+}
+
+// Extract text content from a hast node tree
+function getTextContent(node: any): string {
+  if (node.type === 'text') return node.value || '';
+  if (node.children) return node.children.map(getTextContent).join('');
+  return '';
 }
 
 export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
@@ -126,16 +128,25 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            code({ className, children, ...props }) {
-              const isInline = !className;
-              if (isInline) {
-                return (
-                  <code className={styles.inlineCode} {...props}>
-                    {children}
-                  </code>
-                );
+            pre({ node }) {
+              // Block code: extract language and text from the hast <code> child
+              const codeNode = node?.children?.[0] as any;
+              if (codeNode?.tagName === 'code') {
+                const classNames = (codeNode.properties?.className as string[]) || [];
+                const langMatch = classNames.find((c: string) => /^language-/.test(c));
+                const language = langMatch ? langMatch.replace('language-', '') : 'plaintext';
+                const code = getTextContent(codeNode).replace(/\n$/, '');
+                return <CodeBlock language={language} code={code} />;
               }
-              return <CodeBlock className={className}>{children}</CodeBlock>;
+              return <pre>{node?.children ? undefined : 'unknown'}</pre>;
+            },
+            code({ children, ...props }) {
+              // Only inline code reaches here; block code is handled by pre
+              return (
+                <code className={styles.inlineCode} {...props}>
+                  {children}
+                </code>
+              );
             },
             a({ href, children }) {
               return (

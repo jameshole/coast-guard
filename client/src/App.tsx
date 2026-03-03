@@ -6,6 +6,7 @@ import { CodeViewer } from './components/CodeViewer';
 import { MarkdownViewer } from './components/MarkdownViewer';
 import { CommandPalette } from './components/CommandPalette';
 import { useFileWatcher } from './hooks/useFileWatcher';
+import { useProjectInfo } from './hooks/useFileTree';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,9 +25,23 @@ function isMarkdownFile(path: string): boolean {
 function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const { data: projectInfo } = useProjectInfo();
 
   // Connect to file watcher for live updates
   useFileWatcher(selectedFile);
+
+  // Update browser tab title based on project and selected file
+  useEffect(() => {
+    const repoName = projectInfo?.name;
+    if (!repoName) return;
+
+    if (selectedFile) {
+      const fileName = selectedFile.split('/').pop();
+      document.title = `${fileName} | ${repoName}`;
+    } else {
+      document.title = repoName;
+    }
+  }, [selectedFile, projectInfo?.name]);
 
   const handleFileSelect = useCallback((path: string) => {
     setSelectedFile(path);
