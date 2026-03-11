@@ -19,6 +19,7 @@ interface DisplayLine {
 
 interface CodeViewerProps {
   filePath: string | null;
+  ignoreWhitespace?: boolean;
 }
 
 // Language detection from file extension
@@ -112,9 +113,9 @@ async function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-export function CodeViewer({ filePath }: CodeViewerProps) {
+export function CodeViewer({ filePath, ignoreWhitespace = false }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
-  const { data: diffData } = useFileDiff(filePath);
+  const { data: diffData } = useFileDiff(filePath, ignoreWhitespace);
   const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
   const [highlightedRemovedLines, setHighlightedRemovedLines] = useState<Map<string, string>>(new Map());
   const [isHighlighting, setIsHighlighting] = useState(false);

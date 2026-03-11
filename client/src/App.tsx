@@ -25,6 +25,7 @@ function isMarkdownFile(path: string): boolean {
 function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const { data: projectInfo } = useProjectInfo();
 
   // Connect to file watcher for live updates
@@ -70,7 +71,7 @@ function AppContent() {
       return <MarkdownViewer filePath={selectedFile} />;
     }
 
-    return <CodeViewer filePath={selectedFile} />;
+    return <CodeViewer filePath={selectedFile} ignoreWhitespace={ignoreWhitespace} />;
   };
 
   return (
@@ -81,6 +82,8 @@ function AppContent() {
         }
         main={renderMainContent()}
         currentFile={selectedFile}
+        ignoreWhitespace={ignoreWhitespace}
+        onToggleWhitespace={() => setIgnoreWhitespace(prev => !prev)}
       />
       <CommandPalette
         isOpen={isCommandPaletteOpen}

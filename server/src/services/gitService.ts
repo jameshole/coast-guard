@@ -48,21 +48,23 @@ export class GitService {
     }
   }
 
-  async getFileDiff(filePath: string): Promise<FileDiff> {
+  async getFileDiff(filePath: string, ignoreWhitespace: boolean = false): Promise<FileDiff> {
     const result: FileDiff = {
       staged: null,
       unstaged: null,
     };
 
     try {
+      const baseArgs = ignoreWhitespace ? ['-w'] : [];
+
       // Get staged diff
-      const stagedRaw = await this.git.diff(['--cached', '--', filePath]);
+      const stagedRaw = await this.git.diff([...baseArgs, '--cached', '--', filePath]);
       if (stagedRaw) {
         result.staged = this.parseDiff(stagedRaw);
       }
 
       // Get unstaged diff
-      const unstagedRaw = await this.git.diff(['--', filePath]);
+      const unstagedRaw = await this.git.diff([...baseArgs, '--', filePath]);
       if (unstagedRaw) {
         result.unstaged = this.parseDiff(unstagedRaw);
       }

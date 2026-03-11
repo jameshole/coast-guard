@@ -44,8 +44,8 @@ export const api = {
 
   getGitStatus: (): Promise<GitStatus> => fetchJSON('/git/status'),
 
-  getFileDiff: (file: string): Promise<FileDiff> =>
-    fetchJSON(`/git/diff?file=${encodeURIComponent(file)}`),
+  getFileDiff: (file: string, ignoreWhitespace: boolean = false): Promise<FileDiff> =>
+    fetchJSON(`/git/diff?file=${encodeURIComponent(file)}&ignoreWhitespace=${ignoreWhitespace}`),
 
   getChangedFiles: (): Promise<Record<string, GitFileStatus>> =>
     fetchJSON('/git/changed-files'),

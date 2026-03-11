@@ -7,12 +7,14 @@ interface LayoutProps {
   sidebar: ReactNode;
   main: ReactNode;
   currentFile: string | null;
+  ignoreWhitespace: boolean;
+  onToggleWhitespace: () => void;
 }
 
-export function Layout({ sidebar, main, currentFile }: LayoutProps) {
+export function Layout({ sidebar, main, currentFile, ignoreWhitespace, onToggleWhitespace }: LayoutProps) {
   return (
     <div className={styles.layout}>
-      <Header currentFile={currentFile} />
+      <Header currentFile={currentFile} ignoreWhitespace={ignoreWhitespace} onToggleWhitespace={onToggleWhitespace} />
       <div className={styles.content}>
         <PanelGroup direction="horizontal">
           <Panel defaultSize={20} minSize={15} maxSize={40}>

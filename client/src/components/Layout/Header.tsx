@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, Folder, ChevronUp, ChevronDown } from 'lucide-react';
+import { GitBranch, Folder, ChevronUp, ChevronDown, Space } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import styles from './Header.module.css';
 
 interface HeaderProps {
   currentFile: string | null;
+  ignoreWhitespace: boolean;
+  onToggleWhitespace: () => void;
 }
 
-export function Header({ currentFile }: HeaderProps) {
+export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace }: HeaderProps) {
   const { data: projectInfo } = useProjectInfo();
   const { data: gitCheck } = useGitCheck();
   const { data: gitBranch } = useGitBranch();
@@ -113,6 +115,13 @@ export function Header({ currentFile }: HeaderProps) {
             title="Next change"
           >
             <ChevronDown size={16} />
+          </button>
+          <button
+            className={`${styles.diffNavButton} ${ignoreWhitespace ? styles.diffNavButtonActive : ''}`}
+            onClick={onToggleWhitespace}
+            title={ignoreWhitespace ? 'Showing diff without whitespace changes' : 'Showing all diff changes'}
+          >
+            <Space size={16} />
           </button>
         </div>
       )}

@@ -94,6 +94,11 @@
   color: var(--text-primary);
 }
 
+.diffNavButtonActive {
+  color: var(--accent-color, #58a6ff);
+  background: var(--bg-hover);
+}
+
 .diffCount {
   font-size: 12px;
   color: var(--text-secondary);

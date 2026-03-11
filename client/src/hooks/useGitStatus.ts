@@ -35,10 +35,10 @@ export function useChangedFiles() {
   });
 }
 
-export function useFileDiff(path: string | null) {
+export function useFileDiff(path: string | null, ignoreWhitespace: boolean = false) {
   return useQuery({
-    queryKey: ['fileDiff', path],
-    queryFn: () => (path ? api.getFileDiff(path) : Promise.resolve({ staged: null, unstaged: null })),
+    queryKey: ['fileDiff', path, ignoreWhitespace],
+    queryFn: () => (path ? api.getFileDiff(path, ignoreWhitespace) : Promise.resolve({ staged: null, unstaged: null })),
     enabled: !!path,
     staleTime: 10000,
   });

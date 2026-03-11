@@ -45,7 +45,8 @@ export function createGitRouter(gitService: GitService): Router {
         return;
       }
 
-      const diff = await gitService.getFileDiff(file);
+      const ignoreWhitespace = req.query.ignoreWhitespace === 'true';
+      const diff = await gitService.getFileDiff(file, ignoreWhitespace);
       res.json(diff);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
