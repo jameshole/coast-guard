@@ -62,6 +62,20 @@
   vertical-align: top;
 }
 
+/* Line selection for commenting */
+.selectedLine {
+  background: rgba(79, 193, 255, 0.15) !important;
+}
+
+/* Lines that have comments */
+.commentedLine {
+  background: rgba(79, 193, 255, 0.07);
+}
+
+.commentedLine .lineNumber {
+  color: var(--text-accent);
+}
+
 /* Empty state */
 .empty,
 .loading,

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import { useFileContent } from '../../hooks/useFileContent';
 import { useFileDiff } from '../../hooks/useGitStatus';
@@ -20,6 +20,9 @@ interface DisplayLine {
 interface CodeViewerProps {
   filePath: string | null;
   ignoreWhitespace?: boolean;
+  selectedLines?: { startLine: number; endLine: number } | null;
+  onLineSelectionComplete?: (startLine: number, endLine: number) => void;
+  commentedLines?: Set<number>;
 }
 
 // Language detection from file extension
@@ -113,12 +116,58 @@ async function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-export function CodeViewer({ filePath, ignoreWhitespace = false }: CodeViewerProps) {
+export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const { data: diffData } = useFileDiff(filePath, ignoreWhitespace);
   const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
   const [highlightedRemovedLines, setHighlightedRemovedLines] = useState<Map<string, string>>(new Map());
   const [isHighlighting, setIsHighlighting] = useState(false);
+
+  // Line selection state for commenting
+  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
+  const isDragging = useRef(false);
+
+  const activeSelection = useMemo(() => {
+    if (selectedLines) return selectedLines;
+    if (selectionAnchor !== null && selectionEnd !== null) {
+      const start = Math.min(selectionAnchor, selectionEnd);
+      const end = Math.max(selectionAnchor, selectionEnd);
+      return { startLine: start, endLine: end };
+    }
+    return null;
+  }, [selectedLines, selectionAnchor, selectionEnd]);
+
+  const handleLineMouseDown = useCallback((lineNum: number, e: React.MouseEvent) => {
+    // Only left click on the line number area
+    if (e.button !== 0) return;
+    e.preventDefault();
+    setSelectionAnchor(lineNum);
+    setSelectionEnd(lineNum);
+    isDragging.current = true;
+  }, []);
+
+  const handleLineMouseEnter = useCallback((lineNum: number) => {
+    if (isDragging.current) {
+      setSelectionEnd(lineNum);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isDragging.current && selectionAnchor !== null && selectionEnd !== null) {
+        isDragging.current = false;
+        const start = Math.min(selectionAnchor, selectionEnd);
+        const end = Math.max(selectionAnchor, selectionEnd);
+        onLineSelectionComplete?.(start, end);
+        // Clear internal selection state since parent now owns it via selectedLines
+        setSelectionAnchor(null);
+        setSelectionEnd(null);
+      }
+    };
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [selectionAnchor, selectionEnd, onLineSelectionComplete]);
 
   const content = fileData?.content || '';
   const language = filePath ? detectLanguage(filePath) : 'plaintext';
@@ -373,16 +422,25 @@ export function CodeViewer({ filePath, ignoreWhitespace = false }: CodeViewerPro
                 : undefined;
 
               const isRemoved = line.type === 'removed';
+              const lineNum = isRemoved ? null : line.newLineNumber;
+              const isSelected = !isRemoved && lineNum !== null && activeSelection &&
+                lineNum >= activeSelection.startLine && lineNum <= activeSelection.endLine;
+              const hasComment = !isRemoved && lineNum !== null && commentedLines?.has(lineNum);
 
               return (
                 <tr
                   key={index}
-                  className={`${styles.line} ${line.diffType ? styles[`diff-${line.diffType}`] : ''} ${isRemoved ? styles.removedLine : ''}`}
+                  className={`${styles.line} ${line.diffType ? styles[`diff-${line.diffType}`] : ''} ${isRemoved ? styles.removedLine : ''} ${isSelected ? styles.selectedLine : ''} ${hasComment ? styles.commentedLine : ''}`}
                 >
                   <td className={styles.gutter}>
                     <DiffGutter diff={diffInfo} />
                   </td>
-                  <td className={`${styles.lineNumber} ${isRemoved ? styles.oldLineNumber : ''}`}>
+                  <td
+                    className={`${styles.lineNumber} ${isRemoved ? styles.oldLineNumber : ''}`}
+                    onMouseDown={lineNum ? (e) => handleLineMouseDown(lineNum, e) : undefined}
+                    onMouseEnter={lineNum ? () => handleLineMouseEnter(lineNum) : undefined}
+                    style={lineNum ? { cursor: 'pointer' } : undefined}
+                  >
                     {isRemoved ? line.oldLineNumber : line.newLineNumber}
                   </td>
                   <td

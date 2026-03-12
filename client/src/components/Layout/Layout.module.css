@@ -22,6 +22,11 @@
   overflow: auto;
 }
 
+.commentPanel {
+  height: 100%;
+  overflow: hidden;
+}
+
 .resizeHandle {
   width: 4px;
   background: var(--border-color);
