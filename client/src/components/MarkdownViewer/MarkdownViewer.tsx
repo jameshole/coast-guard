@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createHighlighter, type Highlighter } from 'shiki';
@@ -9,6 +9,9 @@ import styles from './MarkdownViewer.module.css';
 
 interface MarkdownViewerProps {
   filePath: string;
+  onLineSelectionComplete?: (startLine: number, endLine: number) => void;
+  selectedLines?: { startLine: number; endLine: number } | null;
+  commentedLines?: Set<number>;
 }
 
 // Highlighter singleton for code blocks
@@ -83,7 +86,80 @@ function getTextContent(node: any): string {
   return '';
 }
 
-export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
+/** Wraps a block-level markdown element with selectable line-range behavior */
+function SelectableBlock({
+  node,
+  children,
+  onSelect,
+  selectedLines,
+  commentedLines,
+}: {
+  node: any;
+  children: ReactNode;
+  onSelect?: (startLine: number, endLine: number) => void;
+  selectedLines?: { startLine: number; endLine: number } | null;
+  commentedLines?: Set<number>;
+}) {
+  const startLine = node?.position?.start?.line;
+  const endLine = node?.position?.end?.line;
+
+  if (!startLine || !endLine) {
+    return <>{children}</>;
+  }
+
+  const isSelected =
+    selectedLines &&
+    startLine <= selectedLines.endLine &&
+    endLine >= selectedLines.startLine;
+
+  const hasComment = commentedLines
+    ? Array.from({ length: endLine - startLine + 1 }, (_, i) => startLine + i).some(
+        (l) => commentedLines.has(l)
+      )
+    : false;
+
+  return (
+    <div
+      className={`${styles.selectableBlock} ${isSelected ? styles.selectedBlock : ''} ${hasComment ? styles.commentedBlock : ''}`}
+      onClick={(e) => {
+        // Don't trigger on checkbox clicks or link clicks
+        if ((e.target as HTMLElement).closest('input, a')) return;
+        onSelect?.(startLine, endLine);
+      }}
+    >
+      <span className={styles.lineLabel}>
+        {startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Creates a block-level component wrapper that makes the element selectable for commenting.
+ * The returned component renders the original HTML tag wrapped in a SelectableBlock.
+ */
+function makeSelectableComponent(
+  Tag: string,
+  onSelect?: (startLine: number, endLine: number) => void,
+  selectedLines?: { startLine: number; endLine: number } | null,
+  commentedLines?: Set<number>,
+) {
+  return function WrappedComponent({ node, children, ...props }: any) {
+    return (
+      <SelectableBlock
+        node={node}
+        onSelect={onSelect}
+        selectedLines={selectedLines}
+        commentedLines={commentedLines}
+      >
+        <Tag {...props}>{children}</Tag>
+      </SelectableBlock>
+    );
+  };
+}
+
+export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLines, commentedLines }: MarkdownViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const queryClient = useQueryClient();
   const checkboxIndexRef = useRef(0);
@@ -122,23 +198,44 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
 
   const content = fileData?.content || '';
 
+  // Build selectable wrappers for block-level elements
+  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'blockquote', 'table', 'hr'] as const;
+  const selectableComponents: Record<string, any> = {};
+  for (const tag of blockTags) {
+    selectableComponents[tag] = makeSelectableComponent(tag, onLineSelectionComplete, selectedLines, commentedLines);
+  }
+
   return (
     <div className={styles.container}>
       <article className={styles.article}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
+            ...selectableComponents,
             pre({ node }) {
               // Block code: extract language and text from the hast <code> child
               const codeNode = node?.children?.[0] as any;
-              if (codeNode?.tagName === 'code') {
-                const classNames = (codeNode.properties?.className as string[]) || [];
-                const langMatch = classNames.find((c: string) => /^language-/.test(c));
-                const language = langMatch ? langMatch.replace('language-', '') : 'plaintext';
-                const code = getTextContent(codeNode).replace(/\n$/, '');
-                return <CodeBlock language={language} code={code} />;
-              }
-              return <pre>{node?.children ? undefined : 'unknown'}</pre>;
+              const codeBlock = (() => {
+                if (codeNode?.tagName === 'code') {
+                  const classNames = (codeNode.properties?.className as string[]) || [];
+                  const langMatch = classNames.find((c: string) => /^language-/.test(c));
+                  const language = langMatch ? langMatch.replace('language-', '') : 'plaintext';
+                  const code = getTextContent(codeNode).replace(/\n$/, '');
+                  return <CodeBlock language={language} code={code} />;
+                }
+                return <pre>{node?.children ? undefined : 'unknown'}</pre>;
+              })();
+
+              return (
+                <SelectableBlock
+                  node={node}
+                  onSelect={onLineSelectionComplete}
+                  selectedLines={selectedLines}
+                  commentedLines={commentedLines}
+                >
+                  {codeBlock}
+                </SelectableBlock>
+              );
             },
             code({ children, ...props }) {
               // Only inline code reaches here; block code is handled by pre

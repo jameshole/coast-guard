@@ -114,7 +114,14 @@ function AppContent() {
     }
 
     if (isMarkdownFile(selectedFile)) {
-      return <MarkdownViewer filePath={selectedFile} />;
+      return (
+        <MarkdownViewer
+          filePath={selectedFile}
+          selectedLines={pendingSelection}
+          onLineSelectionComplete={handleLineSelectionComplete}
+          commentedLines={commentedLines}
+        />
+      );
     }
 
     return (

@@ -194,6 +194,50 @@
   transform: rotate(45deg);
 }
 
+/* Selectable blocks for commenting */
+.selectableBlock {
+  position: relative;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.selectableBlock:hover {
+  background: rgba(79, 193, 255, 0.08);
+}
+
+.selectableBlock:hover .lineLabel {
+  opacity: 1;
+}
+
+.selectedBlock {
+  background: rgba(79, 193, 255, 0.15) !important;
+}
+
+.commentedBlock {
+  background: rgba(79, 193, 255, 0.07);
+  border-left: 2px solid var(--text-accent);
+  padding-left: 6px;
+  margin-left: -8px;
+}
+
+.lineLabel {
+  position: absolute;
+  right: -4px;
+  top: 2px;
+  transform: translateX(100%);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+  white-space: nowrap;
+  padding-left: 8px;
+}
+
 /* Loading/Error states */
 .loading,
 .error {
