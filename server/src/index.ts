@@ -68,7 +68,32 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
   const app = createServer(config);
   const httpServer = createHttpServer(app);
 
-  // Create WebSocket server
+  // Find an available port first
+  const maxAttempts = 20;
+  let currentPort = config.port;
+  let boundPort: number | null = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      boundPort = await tryListen(httpServer, currentPort);
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+        currentPort++;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (boundPort === null) {
+    throw new Error(`Could not find an available port after ${maxAttempts} attempts`);
+  }
+
+  console.log(`Coast Guard server running on http://localhost:${boundPort}`);
+  console.log(`Browsing: ${config.projectPath}`);
+
+  // Create WebSocket server after port is successfully bound
   const wss = new WebSocketServer({ server: httpServer });
 
   // Create and start file watcher
@@ -107,41 +132,20 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
     });
   });
 
-  const maxAttempts = 20;
-  let currentPort = config.port;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const result = await tryPort(httpServer, currentPort, config.projectPath, wss, watchService);
-      return result;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-        currentPort++;
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  throw new Error(`Could not find an available port after ${maxAttempts} attempts`);
+  return { server: httpServer, port: boundPort, wss, watchService };
 }
 
-function tryPort(
-  httpServer: HttpServer,
-  port: number,
-  projectPath: string,
-  wss: WebSocketServer,
-  watchService: WatchService
-): Promise<StartServerResult> {
+function tryListen(httpServer: HttpServer, port: number): Promise<number> {
   return new Promise((resolve, reject) => {
-    httpServer.listen(port, () => {
-      console.log(`Coast Guard server running on http://localhost:${port}`);
-      console.log(`Browsing: ${projectPath}`);
-      resolve({ server: httpServer, port, wss, watchService });
-    });
-
-    httpServer.on('error', (error) => {
+    const onError = (error: Error) => {
+      httpServer.removeListener('error', onError);
       reject(error);
+    };
+    httpServer.on('error', onError);
+
+    httpServer.listen(port, () => {
+      httpServer.removeListener('error', onError);
+      resolve(port);
     });
   });
 }

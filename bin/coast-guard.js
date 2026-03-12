@@ -46,7 +46,7 @@ program
     }
 
     // Start server (auto-finds available port)
-    const { server, port: actualPort } = await startServer({
+    const { server, port: actualPort, wss, watchService } = await startServer({
       projectPath: absolutePath,
       port,
     });
@@ -70,9 +70,28 @@ program
     // Handle shutdown gracefully
     const shutdown = () => {
       console.log('\nShutting down...');
-      server.close(() => {
-        process.exit(0);
+
+      watchService.stop();
+
+      // Notify clients of shutdown so they can close their tabs
+      const shutdownMessage = JSON.stringify({ type: 'shutdown' });
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(shutdownMessage);
+        }
+        client.close();
       });
+
+      wss.close(() => {
+        server.close(() => {
+          process.exit(0);
+        });
+      });
+
+      // Force exit if graceful shutdown stalls
+      setTimeout(() => {
+        process.exit(1);
+      }, 3000);
     };
 
     process.on('SIGINT', shutdown);

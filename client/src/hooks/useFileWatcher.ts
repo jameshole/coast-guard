@@ -1,17 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface FileChangeEvent {
-  type: 'change' | 'gitStatus' | 'connected';
+  type: 'change' | 'gitStatus' | 'connected' | 'shutdown';
   path?: string;
   changedFiles?: string[];
 }
 
-export function useFileWatcher(currentFile: string | null) {
+export function useFileWatcher(currentFile: string | null): { connected: boolean } {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const currentFileRef = useRef<string | null>(currentFile);
+  const [connected, setConnected] = useState(true);
 
   // Keep ref updated
   currentFileRef.current = currentFile;
@@ -27,6 +28,7 @@ export function useFileWatcher(currentFile: string | null) {
 
       ws.onopen = () => {
         console.log('File watcher connected');
+        setConnected(true);
         // Send current file to watch
         if (currentFileRef.current) {
           ws.send(JSON.stringify({ type: 'watchFile', path: currentFileRef.current }));
@@ -38,6 +40,11 @@ export function useFileWatcher(currentFile: string | null) {
           const data: FileChangeEvent = JSON.parse(event.data);
 
           if (data.type === 'connected') {
+            return;
+          }
+
+          if (data.type === 'shutdown') {
+            window.close();
             return;
           }
 
@@ -68,6 +75,7 @@ export function useFileWatcher(currentFile: string | null) {
 
       ws.onclose = () => {
         console.log('File watcher disconnected, reconnecting in 2s...');
+        setConnected(false);
         // Attempt to reconnect after 2 seconds
         reconnectTimeoutRef.current = window.setTimeout(connect, 2000);
       };
@@ -96,4 +104,6 @@ export function useFileWatcher(currentFile: string | null) {
       wsRef.current.send(JSON.stringify({ type: 'watchFile', path: currentFile }));
     }
   }, [currentFile]);
+
+  return { connected };
 }
