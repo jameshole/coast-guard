@@ -40,42 +40,130 @@ async function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-interface CodeBlockProps {
-  language: string;
-  code: string;
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-function CodeBlock({ language, code }: CodeBlockProps) {
-  const [html, setHtml] = useState<string | null>(null);
+interface SelectableCodeBlockProps {
+  language: string;
+  code: string;
+  /** Source line number of the opening ``` fence */
+  fenceStartLine: number;
+  onSelect?: (startLine: number, endLine: number) => void;
+  selectedLines?: { startLine: number; endLine: number } | null;
+  commentedLines?: Set<number>;
+}
+
+function SelectableCodeBlock({
+  language,
+  code,
+  fenceStartLine,
+  onSelect,
+  selectedLines,
+  commentedLines,
+}: SelectableCodeBlockProps) {
+  const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
+  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
+  const isDragging = useRef(false);
+
+  // Code content starts on the line after the fence
+  const codeStartLine = fenceStartLine + 1;
+  const codeLines = code.split('\n');
 
   useEffect(() => {
     getHighlighter()
       .then((highlighter) => {
-        const highlighted = highlighter.codeToHtml(code, {
-          lang: language as Parameters<Highlighter['codeToHtml']>[1]['lang'],
+        const tokens = highlighter.codeToTokens(code, {
+          lang: language as Parameters<Highlighter['codeToTokens']>[1]['lang'],
           theme: 'github-dark',
         });
-        setHtml(highlighted);
+        const htmlLines = tokens.tokens.map((lineTokens) =>
+          lineTokens
+            .map(
+              (token) =>
+                `<span style="color: ${token.color || 'inherit'}">${escapeHtml(token.content)}</span>`
+            )
+            .join('')
+        );
+        setHighlightedLines(htmlLines);
       })
       .catch(() => {
-        // Fallback to plain code
-        setHtml(null);
+        setHighlightedLines(codeLines.map(escapeHtml));
       });
   }, [code, language]);
 
-  if (html) {
-    return (
-      <div
-        className={styles.codeBlock}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
-  }
+  // Compute active selection (from props or local drag state)
+  const dragSelection =
+    selectionAnchor !== null && selectionEnd !== null
+      ? { startLine: Math.min(selectionAnchor, selectionEnd), endLine: Math.max(selectionAnchor, selectionEnd) }
+      : null;
+  const activeSelection = dragSelection || selectedLines;
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isDragging.current && selectionAnchor !== null && selectionEnd !== null) {
+        isDragging.current = false;
+        const start = Math.min(selectionAnchor, selectionEnd);
+        const end = Math.max(selectionAnchor, selectionEnd);
+        onSelect?.(start, end);
+        setSelectionAnchor(null);
+        setSelectionEnd(null);
+      }
+    };
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [selectionAnchor, selectionEnd, onSelect]);
+
+  const lines = highlightedLines.length > 0 ? highlightedLines : codeLines.map(escapeHtml);
 
   return (
-    <pre className={styles.codeBlock}>
-      <code>{code}</code>
-    </pre>
+    <div className={styles.codeBlock}>
+      <table className={styles.codeTable}>
+        <tbody>
+          {lines.map((html, i) => {
+            const sourceLine = codeStartLine + i;
+            const isSelected =
+              activeSelection &&
+              sourceLine >= activeSelection.startLine &&
+              sourceLine <= activeSelection.endLine;
+            const hasComment = commentedLines?.has(sourceLine);
+
+            return (
+              <tr
+                key={i}
+                className={`${styles.codeLine} ${isSelected ? styles.selectedCodeLine : ''} ${hasComment ? styles.commentedCodeLine : ''}`}
+              >
+                <td
+                  className={styles.codeLineNumber}
+                  onMouseDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    setSelectionAnchor(sourceLine);
+                    setSelectionEnd(sourceLine);
+                    isDragging.current = true;
+                  }}
+                  onMouseEnter={() => {
+                    if (isDragging.current) setSelectionEnd(sourceLine);
+                  }}
+                >
+                  {sourceLine}
+                </td>
+                <td
+                  className={styles.codeLineContent}
+                  dangerouslySetInnerHTML={{ __html: html || '&nbsp;' }}
+                />
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -215,27 +303,24 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
             pre({ node }) {
               // Block code: extract language and text from the hast <code> child
               const codeNode = node?.children?.[0] as any;
-              const codeBlock = (() => {
-                if (codeNode?.tagName === 'code') {
-                  const classNames = (codeNode.properties?.className as string[]) || [];
-                  const langMatch = classNames.find((c: string) => /^language-/.test(c));
-                  const language = langMatch ? langMatch.replace('language-', '') : 'plaintext';
-                  const code = getTextContent(codeNode).replace(/\n$/, '');
-                  return <CodeBlock language={language} code={code} />;
-                }
-                return <pre>{node?.children ? undefined : 'unknown'}</pre>;
-              })();
-
-              return (
-                <SelectableBlock
-                  node={node}
-                  onSelect={onLineSelectionComplete}
-                  selectedLines={selectedLines}
-                  commentedLines={commentedLines}
-                >
-                  {codeBlock}
-                </SelectableBlock>
-              );
+              if (codeNode?.tagName === 'code') {
+                const classNames = (codeNode.properties?.className as string[]) || [];
+                const langMatch = classNames.find((c: string) => /^language-/.test(c));
+                const language = langMatch ? langMatch.replace('language-', '') : 'plaintext';
+                const code = getTextContent(codeNode).replace(/\n$/, '');
+                const fenceStartLine = node?.position?.start?.line ?? 0;
+                return (
+                  <SelectableCodeBlock
+                    language={language}
+                    code={code}
+                    fenceStartLine={fenceStartLine}
+                    onSelect={onLineSelectionComplete}
+                    selectedLines={selectedLines}
+                    commentedLines={commentedLines}
+                  />
+                );
+              }
+              return <pre>{node?.children ? undefined : 'unknown'}</pre>;
             },
             code({ children, ...props }) {
               // Only inline code reaches here; block code is handled by pre
