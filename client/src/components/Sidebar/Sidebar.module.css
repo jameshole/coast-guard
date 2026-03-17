@@ -55,7 +55,58 @@
   border-radius: 8px;
 }
 
-.content {
-  flex: 1;
+.commentBadge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  background: var(--text-accent);
+  color: var(--bg-primary);
+  border-radius: 8px;
+}
+
+.contentWrapper {
+  display: flex;
   overflow: hidden;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+.contentWrapper.noTransition {
+  transition: none;
+}
+
+.contentWrapper.contentCollapsed {
+  width: 0 !important;
+}
+
+.content {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.resizeHandle {
+  width: 4px;
+  cursor: col-resize;
+  background: var(--border-color);
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.resizeHandle:hover {
+  background: var(--text-accent);
+}
+
+.tabSpacer {
+  flex: 1;
+}
+
+.collapseIconFlipped {
+  transform: scaleX(-1);
 }

@@ -170,21 +170,25 @@ function AppContent() {
     <>
       <Layout
         sidebar={
-          <Sidebar onFileSelect={handleFileSelect} selectedFile={selectedFile} />
-        }
-        main={renderMainContent()}
-        commentPanel={
-          <CommentPanel
-            comments={comments}
-            currentFile={selectedFile}
-            onAddComment={handleAddComment}
-            onDeleteComment={handleDeleteComment}
-            onClearCurrentFile={handleClearCurrentFile}
-            onClearAll={handleClearAll}
-            pendingSelection={pendingSelection}
-            onCancelSelection={handleCancelSelection}
+          <Sidebar
+            onFileSelect={handleFileSelect}
+            selectedFile={selectedFile}
+            commentCount={comments.length}
+            commentPanel={
+              <CommentPanel
+                comments={comments}
+                currentFile={selectedFile}
+                onAddComment={handleAddComment}
+                onDeleteComment={handleDeleteComment}
+                onClearCurrentFile={handleClearCurrentFile}
+                onClearAll={handleClearAll}
+                pendingSelection={pendingSelection}
+                onCancelSelection={handleCancelSelection}
+              />
+            }
           />
         }
+        main={renderMainContent()}
         currentFile={selectedFile}
         ignoreWhitespace={ignoreWhitespace}
         onToggleWhitespace={() => setIgnoreWhitespace(prev => !prev)}

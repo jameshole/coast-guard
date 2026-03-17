@@ -7,33 +7,21 @@
 
 .content {
   flex: 1;
+  display: flex;
   overflow: hidden;
 }
 
 .sidebar {
   height: 100%;
   background: var(--bg-secondary);
-  overflow: auto;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .main {
+  flex: 1;
   height: 100%;
+  min-width: 0;
   background: var(--bg-primary);
   overflow: auto;
-}
-
-.commentPanel {
-  height: 100%;
-  overflow: hidden;
-}
-
-.resizeHandle {
-  width: 4px;
-  background: var(--border-color);
-  transition: background 0.15s ease;
-}
-
-.resizeHandle:hover,
-.resizeHandle[data-resize-handle-active] {
-  background: var(--text-accent);
 }
