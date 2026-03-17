@@ -12,9 +12,10 @@ interface SidebarProps {
   selectedFile: string | null;
   commentCount: number;
   commentPanel: ReactNode;
+  pendingSelection: { startLine: number; endLine: number } | null;
 }
 
-export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel }: SidebarProps) {
+export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel, pendingSelection }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>('explorer');
   const [collapsed, setCollapsed] = useState(false);
   const [contentWidth, setContentWidth] = useState(260);
@@ -22,6 +23,13 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
   const dragging = useRef(false);
   const { data: changedFiles } = useChangedFiles();
   const changedCount = changedFiles ? Object.keys(changedFiles).length : 0;
+
+  useEffect(() => {
+    if (pendingSelection) {
+      setActiveTab('comments');
+      setCollapsed(false);
+    }
+  }, [pendingSelection]);
 
   const handleTabClick = useCallback((tab: TabType) => {
     if (activeTab === tab && !collapsed) {

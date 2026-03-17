@@ -174,6 +174,7 @@ function AppContent() {
             onFileSelect={handleFileSelect}
             selectedFile={selectedFile}
             commentCount={comments.length}
+            pendingSelection={pendingSelection}
             commentPanel={
               <CommentPanel
                 comments={comments}
