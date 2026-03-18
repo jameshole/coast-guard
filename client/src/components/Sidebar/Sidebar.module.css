@@ -110,3 +110,19 @@
 .collapseIconFlipped {
   transform: scaleX(-1);
 }
+
+.shortcutHint {
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  pointer-events: none;
+}

@@ -20,6 +20,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
   const [collapsed, setCollapsed] = useState(false);
   const [contentWidth, setContentWidth] = useState(260);
   const [resizing, setResizing] = useState(false);
+  const [ctrlHeld, setCtrlHeld] = useState(false);
   const dragging = useRef(false);
   const { data: changedFiles } = useChangedFiles();
   const changedCount = changedFiles ? Object.keys(changedFiles).length : 0;
@@ -46,6 +47,35 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
     setResizing(true);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const tabs: Record<string, TabType> = { '1': 'explorer', '2': 'source-control', '3': 'comments' };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control') setCtrlHeld(true);
+      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.key in tabs) {
+        e.preventDefault();
+        const tab = tabs[e.key];
+        setActiveTab(tab);
+        setCollapsed(false);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        setCollapsed((c) => !c);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') setCtrlHeld(false);
+    };
+    const handleBlur = () => setCtrlHeld(false);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
   }, []);
 
   useEffect(() => {
@@ -80,6 +110,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
           title="Explorer"
         >
           <FolderTree size={18} />
+          {ctrlHeld && <span className={styles.shortcutHint}>1</span>}
         </button>
         <button
           className={`${styles.tab} ${activeTab === 'source-control' && !collapsed ? styles.active : ''}`}
@@ -87,7 +118,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
           title="Source Control"
         >
           <GitBranch size={18} />
-          {changedCount > 0 && <span className={styles.badge}>{changedCount}</span>}
+          {ctrlHeld ? <span className={styles.shortcutHint}>2</span> : changedCount > 0 && <span className={styles.badge}>{changedCount}</span>}
         </button>
         <button
           className={`${styles.tab} ${activeTab === 'comments' && !collapsed ? styles.active : ''}`}
@@ -95,7 +126,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
           title="Comments"
         >
           <MessageSquare size={18} />
-          {commentCount > 0 && <span className={styles.commentBadge}>{commentCount}</span>}
+          {ctrlHeld ? <span className={styles.shortcutHint}>3</span> : commentCount > 0 && <span className={styles.commentBadge}>{commentCount}</span>}
         </button>
         <div className={styles.tabSpacer} />
         <button
@@ -104,6 +135,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
           title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
         >
           <PanelLeftClose size={18} className={collapsed ? styles.collapseIconFlipped : ''} />
+          {ctrlHeld && <span className={styles.shortcutHint}>0</span>}
         </button>
       </div>
       <div
