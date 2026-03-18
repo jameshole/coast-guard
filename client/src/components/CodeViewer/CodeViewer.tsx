@@ -188,7 +188,14 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
     const processHunks = (hunks: LineDiff[][], isStaged: boolean) => {
       for (const hunk of hunks) {
         let pendingRemovals: Array<{ oldLineNumber: number; content: string; isStaged: boolean }> = [];
-        let insertBeforeLine: number | null = null;
+
+        const flushRemovals = (beforeLine: number) => {
+          if (pendingRemovals.length > 0) {
+            const existing = removedLinesMap.get(beforeLine) || [];
+            removedLinesMap.set(beforeLine, [...existing, ...pendingRemovals]);
+            pendingRemovals = [];
+          }
+        };
 
         for (const line of hunk) {
           if (line.type === 'remove') {
@@ -202,24 +209,16 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
             if (!additionsMap[line.lineNumber]) {
               additionsMap[line.lineNumber] = { isStaged };
             }
-            // If we have pending removals, they should appear before this added line
-            if (pendingRemovals.length > 0 && insertBeforeLine === null) {
-              insertBeforeLine = line.lineNumber;
-            }
+            // Flush any pending removals before this added line
+            flushRemovals(line.lineNumber);
           } else if (line.type === 'context') {
-            // Context line - if we have pending removals, they appear before this line
-            if (pendingRemovals.length > 0 && insertBeforeLine === null) {
-              insertBeforeLine = line.lineNumber;
-            }
+            // Context line - flush any pending removals before this line
+            flushRemovals(line.lineNumber);
           }
         }
 
-        // Insert pending removals
-        if (pendingRemovals.length > 0 && insertBeforeLine !== null) {
-          const existing = removedLinesMap.get(insertBeforeLine) || [];
-          removedLinesMap.set(insertBeforeLine, [...existing, ...pendingRemovals]);
-        } else if (pendingRemovals.length > 0) {
-          // Removals at end of file - insert after last line
+        // Handle removals at end of hunk (end of file)
+        if (pendingRemovals.length > 0) {
           const lastLineNum = highlightedLines.length + 1;
           const existing = removedLinesMap.get(lastLineNum) || [];
           removedLinesMap.set(lastLineNum, [...existing, ...pendingRemovals]);
