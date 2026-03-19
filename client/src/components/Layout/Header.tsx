@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, Folder, ChevronUp, ChevronDown, Space } from 'lucide-react';
+import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import styles from './Header.module.css';
@@ -91,6 +91,13 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace }: He
         <div className={styles.breadcrumb}>
           <span className={styles.separator}>/</span>
           <span className={styles.currentFile}>{currentFile}</span>
+          <button
+            className={styles.openInEditor}
+            onClick={() => window.open(`cursor://file/${projectInfo?.path}/${currentFile}`, '_blank')}
+            title="Open in Cursor"
+          >
+            <ExternalLink size={14} />
+          </button>
         </div>
       )}
 
