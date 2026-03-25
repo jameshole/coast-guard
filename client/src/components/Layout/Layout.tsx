@@ -8,12 +8,14 @@ interface LayoutProps {
   currentFile: string | null;
   ignoreWhitespace: boolean;
   onToggleWhitespace: () => void;
+  markdownCodeView: boolean;
+  onToggleMarkdownCodeView: () => void;
 }
 
-export function Layout({ sidebar, main, currentFile, ignoreWhitespace, onToggleWhitespace }: LayoutProps) {
+export function Layout({ sidebar, main, currentFile, ignoreWhitespace, onToggleWhitespace, markdownCodeView, onToggleMarkdownCodeView }: LayoutProps) {
   return (
     <div className={styles.layout}>
-      <Header currentFile={currentFile} ignoreWhitespace={ignoreWhitespace} onToggleWhitespace={onToggleWhitespace} />
+      <Header currentFile={currentFile} ignoreWhitespace={ignoreWhitespace} onToggleWhitespace={onToggleWhitespace} markdownCodeView={markdownCodeView} onToggleMarkdownCodeView={onToggleMarkdownCodeView} />
       <div className={styles.content}>
         <div className={styles.sidebar}>{sidebar}</div>
         <div className={styles.main}>{main}</div>

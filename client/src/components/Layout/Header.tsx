@@ -1,16 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink } from 'lucide-react';
+import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Code } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import styles from './Header.module.css';
+
+function isMarkdownFile(path: string): boolean {
+  const ext = path.split('.').pop()?.toLowerCase();
+  return ext === 'md' || ext === 'mdx';
+}
 
 interface HeaderProps {
   currentFile: string | null;
   ignoreWhitespace: boolean;
   onToggleWhitespace: () => void;
+  markdownCodeView: boolean;
+  onToggleMarkdownCodeView: () => void;
 }
 
-export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace }: HeaderProps) {
+export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, markdownCodeView, onToggleMarkdownCodeView }: HeaderProps) {
   const { data: projectInfo } = useProjectInfo();
   const { data: gitCheck } = useGitCheck();
   const { data: gitBranch } = useGitBranch();
@@ -102,6 +109,27 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace }: He
       )}
 
       <div className={styles.spacer} />
+
+      {currentFile && isMarkdownFile(currentFile) && (
+        <div className={styles.viewToggle}>
+          <button
+            className={`${styles.viewToggleButton} ${!markdownCodeView ? styles.viewToggleButtonActive : ''}`}
+            onClick={() => markdownCodeView && onToggleMarkdownCodeView()}
+            title="Rendered view"
+          >
+            <Eye size={14} />
+            <span>Rendered</span>
+          </button>
+          <button
+            className={`${styles.viewToggleButton} ${markdownCodeView ? styles.viewToggleButtonActive : ''}`}
+            onClick={() => !markdownCodeView && onToggleMarkdownCodeView()}
+            title="Code view"
+          >
+            <Code size={14} />
+            <span>Code</span>
+          </button>
+        </div>
+      )}
 
       {diffCount > 0 && (
         <div className={styles.diffNav}>

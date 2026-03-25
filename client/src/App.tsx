@@ -30,6 +30,7 @@ function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+  const [markdownCodeView, setMarkdownCodeView] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ startLine: number; endLine: number } | null>(null);
   const { data: projectInfo } = useProjectInfo();
@@ -53,6 +54,7 @@ function AppContent() {
   const handleFileSelect = useCallback((path: string) => {
     setSelectedFile(path);
     setPendingSelection(null);
+    setMarkdownCodeView(false);
   }, []);
 
   // Global keyboard shortcut for cmd+k
@@ -113,7 +115,7 @@ function AppContent() {
       return <CodeViewer filePath={null} />;
     }
 
-    if (isMarkdownFile(selectedFile)) {
+    if (isMarkdownFile(selectedFile) && !markdownCodeView) {
       return (
         <MarkdownViewer
           filePath={selectedFile}
@@ -193,6 +195,8 @@ function AppContent() {
         currentFile={selectedFile}
         ignoreWhitespace={ignoreWhitespace}
         onToggleWhitespace={() => setIgnoreWhitespace(prev => !prev)}
+        markdownCodeView={markdownCodeView}
+        onToggleMarkdownCodeView={() => setMarkdownCodeView(prev => !prev)}
       />
       <CommandPalette
         isOpen={isCommandPaletteOpen}
