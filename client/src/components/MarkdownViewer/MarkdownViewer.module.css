@@ -9,6 +9,7 @@
   margin: 0 auto;
   padding: 32px 48px;
   color: var(--text-primary);
+  font-size: 15px;
   line-height: 1.6;
 }
 
