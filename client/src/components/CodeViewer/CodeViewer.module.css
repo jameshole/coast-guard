@@ -76,6 +76,27 @@
   color: var(--text-accent);
 }
 
+/* Go to definition - clickable tokens */
+.clickableToken {
+  cursor: inherit;
+  border-radius: 2px;
+}
+
+.cmdHeld .clickableToken:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Target line highlight (scroll-to-line) */
+.targetLine {
+  animation: flashHighlight 2s ease-out;
+}
+
+@keyframes flashHighlight {
+  0% { background: rgba(255, 213, 0, 0.25); }
+  100% { background: transparent; }
+}
+
 /* Empty state */
 .empty,
 .loading,

@@ -1,4 +1,4 @@
-import type { FileNode, GitStatus, FileDiff, ProjectInfo, GitFileStatus } from '../types';
+import type { FileNode, GitStatus, FileDiff, ProjectInfo, GitFileStatus, DefinitionResult } from '../types';
 
 const API_BASE = '/api';
 
@@ -49,6 +49,10 @@ export const api = {
 
   getChangedFiles: (): Promise<Record<string, GitFileStatus>> =>
     fetchJSON('/git/changed-files'),
+
+  // Definitions
+  getDefinition: (filePath: string, offset: number): Promise<DefinitionResult[]> =>
+    fetchJSON(`/files/definitions?filePath=${encodeURIComponent(filePath)}&offset=${offset}`),
 
   // Markdown
   toggleCheckbox: (path: string, index: number): Promise<{ content: string }> =>

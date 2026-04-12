@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { FileService } from '../services/fileService.js';
+import { TypeScriptService } from '../services/typescriptService.js';
 
-export function createFilesRouter(fileService: FileService): Router {
+export function createFilesRouter(fileService: FileService, tsService: TypeScriptService): Router {
   const router = Router();
 
   // Get directory tree
@@ -41,6 +42,29 @@ export function createFilesRouter(fileService: FileService): Router {
     try {
       const files = await fileService.getAllFiles();
       res.json(files);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // Go to definition using TypeScript language service
+  router.get('/definitions', (req: Request, res: Response) => {
+    try {
+      const filePath = req.query.filePath as string;
+      const offset = parseInt(req.query.offset as string, 10);
+
+      if (!filePath) {
+        res.status(400).json({ error: 'filePath is required' });
+        return;
+      }
+      if (isNaN(offset) || offset < 0) {
+        res.status(400).json({ error: 'Valid offset is required' });
+        return;
+      }
+
+      const results = tsService.getDefinition(filePath, offset);
+      res.json(results);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       res.status(500).json({ error: message });

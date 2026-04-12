@@ -6,10 +6,17 @@ import { DiffGutter } from './DiffGutter';
 import type { LineDiff } from '../../types';
 import styles from './CodeViewer.module.css';
 
+interface TokenInfo {
+  content: string;
+  color: string;
+  isClickable: boolean;
+  offset: number;
+}
+
 // A display line can be either from the current file or a removed line from diff
 interface DisplayLine {
   type: 'current' | 'removed';
-  content: string; // HTML content for current lines, plain text for removed
+  content: string; // HTML content for removed lines only
   highlightKey?: string; // Key for looking up highlighted content (for removed lines)
   newLineNumber: number | null; // Line number in current file (null for removed)
   oldLineNumber: number | null; // Line number in old file (for removed lines)
@@ -23,6 +30,8 @@ interface CodeViewerProps {
   selectedLines?: { startLine: number; endLine: number } | null;
   onLineSelectionComplete?: (startLine: number, endLine: number) => void;
   commentedLines?: Set<number>;
+  onGoToDefinition?: (filePath: string, offset: number) => void;
+  targetLine?: number | null;
 }
 
 // Language detection from file extension
@@ -116,17 +125,73 @@ async function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines }: CodeViewerProps) {
+// Check if a token is NOT navigable based on its TextMate scopes.
+// Blocklist approach: everything is clickable unless it's clearly not an identifier.
+function isIdentifierToken(scopes: string[]): boolean {
+  for (const scope of scopes) {
+    if (
+      scope.startsWith('keyword.') ||
+      scope.startsWith('storage.') ||
+      scope.startsWith('string.') ||
+      scope.startsWith('comment.') ||
+      scope.startsWith('punctuation.') ||
+      scope.startsWith('constant.numeric') ||
+      scope.startsWith('constant.language') ||
+      scope.startsWith('constant.character') ||
+      scope.startsWith('variable.language') ||
+      scope.startsWith('entity.name.tag') ||
+      scope.startsWith('entity.name.section') ||
+      scope.startsWith('meta.brace') ||
+      scope.startsWith('meta.separator')
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const { data: diffData } = useFileDiff(filePath, ignoreWhitespace);
-  const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
+  const [highlightedLines, setHighlightedLines] = useState<TokenInfo[][]>([]);
   const [highlightedRemovedLines, setHighlightedRemovedLines] = useState<Map<string, string>>(new Map());
   const [isHighlighting, setIsHighlighting] = useState(false);
+  const [cmdHeld, setCmdHeld] = useState(false);
 
   // Line selection state for commenting
   const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
   const isDragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track Cmd/Ctrl key state for go-to-definition
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey) setCmdHeld(true);
+    };
+    const handleKeyUp = () => {
+      setCmdHeld(false);
+    };
+    const handleBlur = () => setCmdHeld(false);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  // Scroll to target line when it changes
+  useEffect(() => {
+    if (targetLine && containerRef.current && highlightedLines.length > 0) {
+      const targetRow = containerRef.current.querySelector(`tr[data-line="${targetLine}"]`);
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [targetLine, highlightedLines]);
 
   const activeSelection = useMemo(() => {
     if (selectedLines) return selectedLines;
@@ -169,6 +234,15 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [selectionAnchor, selectionEnd, onLineSelectionComplete]);
 
+  const handleTokenClick = useCallback((e: React.MouseEvent<HTMLSpanElement>) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    const offset = e.currentTarget.dataset.offset;
+    if (offset && filePath && onGoToDefinition) {
+      onGoToDefinition(filePath, parseInt(offset, 10));
+    }
+  }, [filePath, onGoToDefinition]);
+
   const content = fileData?.content || '';
   const language = filePath ? detectLanguage(filePath) : 'plaintext';
 
@@ -180,8 +254,6 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
     const additionsMap: Record<number, { isStaged: boolean }> = {};
 
     // Build a map of removed lines to insert before each new line number
-    // Key: new line number where removed lines should appear before
-    // Value: array of removed lines with their old line numbers
     const removedLinesMap: Map<number, Array<{ oldLineNumber: number; content: string; isStaged: boolean }>> = new Map();
 
     // Process diff hunks to extract removed lines and additions
@@ -257,7 +329,7 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
       const addition = additionsMap[lineNum];
       lines.push({
         type: 'current',
-        content: highlightedLines[i],
+        content: '', // Not used for current lines anymore — tokens are in highlightedLines
         newLineNumber: lineNum,
         oldLineNumber: null,
         diffType: addition ? 'add' : null,
@@ -295,35 +367,57 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
 
     getHighlighter()
       .then((highlighter) => {
-        // Use codeToTokens to get tokens for each line
         const highlighted = highlighter.codeToTokens(content, {
           lang: language,
           theme: 'github-dark',
+          includeExplanation: 'scopeName',
         });
 
-        // Convert tokens to HTML lines
-        const htmlLines = highlighted.tokens.map((lineTokens) => {
-          return lineTokens
-            .map(
-              (token) =>
-                `<span style="color: ${token.color || 'inherit'}">${escapeHtml(token.content)}</span>`
-            )
-            .join('');
+        // Convert tokens to structured TokenInfo arrays
+        const tokenLines = highlighted.tokens.map((lineTokens) => {
+          return lineTokens.map((token) => {
+            // Collect all scope names from the token's explanation
+            const scopes: string[] = [];
+            if (token.explanation) {
+              for (const exp of token.explanation) {
+                for (const scope of exp.scopes) {
+                  scopes.push(scope.scopeName);
+                }
+              }
+            }
+
+            const trimmed = token.content.trim();
+            const clickable = trimmed.length > 1 &&
+              /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(trimmed) &&
+              isIdentifierToken(scopes);
+
+            return {
+              content: token.content,
+              color: token.color || 'inherit',
+              isClickable: clickable,
+              offset: token.offset,
+            };
+          });
         });
 
-        setHighlightedLines(htmlLines);
+        setHighlightedLines(tokenLines);
       })
       .catch((err) => {
         console.error('Highlighting failed:', err);
         // Fallback to plain text
-        setHighlightedLines(content.split('\n').map(escapeHtml));
+        setHighlightedLines(
+          content.split('\n').map((line, i, arr) => {
+            const lineOffset = arr.slice(0, i).reduce((sum, l) => sum + l.length + 1, 0);
+            return [{ content: line, color: 'inherit', isClickable: false, offset: lineOffset }];
+          })
+        );
       })
       .finally(() => {
         setIsHighlighting(false);
       });
   }, [content, language]);
 
-  // Highlight removed lines from diff
+  // Highlight removed lines from diff (keep as HTML since they don't need clickability)
   useEffect(() => {
     if (!diffData) {
       setHighlightedRemovedLines(new Map());
@@ -337,7 +431,6 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
       for (const hunk of hunks) {
         for (const line of hunk) {
           if (line.type === 'remove') {
-            // Use a unique key combining staged status and line number
             const key = `${isStaged ? 's' : 'u'}-${line.lineNumber}`;
             removedLines.push({ key, content: line.content });
           }
@@ -357,7 +450,6 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
       return;
     }
 
-    // Highlight all removed lines
     getHighlighter()
       .then((highlighter) => {
         const highlighted = new Map<string, string>();
@@ -368,7 +460,6 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
             theme: 'github-dark',
           });
 
-          // Convert first line of tokens to HTML (there should only be one line)
           const html = tokens.tokens[0]
             ?.map(
               (token) =>
@@ -411,7 +502,7 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
   }
 
   return (
-    <div className={styles.container}>
+    <div ref={containerRef} className={`${styles.container} ${cmdHeld ? styles.cmdHeld : ''}`}>
       <div className={styles.codeWrapper}>
         <table className={styles.codeTable}>
           <tbody>
@@ -425,11 +516,13 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
               const isSelected = !isRemoved && lineNum !== null && activeSelection &&
                 lineNum >= activeSelection.startLine && lineNum <= activeSelection.endLine;
               const hasComment = !isRemoved && lineNum !== null && commentedLines?.has(lineNum);
+              const isTarget = lineNum !== null && lineNum === targetLine;
 
               return (
                 <tr
                   key={index}
-                  className={`${styles.line} ${line.diffType ? styles[`diff-${line.diffType}`] : ''} ${isRemoved ? styles.removedLine : ''} ${isSelected ? styles.selectedLine : ''} ${hasComment ? styles.commentedLine : ''}`}
+                  data-line={lineNum}
+                  className={`${styles.line} ${line.diffType ? styles[`diff-${line.diffType}`] : ''} ${isRemoved ? styles.removedLine : ''} ${isSelected ? styles.selectedLine : ''} ${hasComment ? styles.commentedLine : ''} ${isTarget ? styles.targetLine : ''}`}
                 >
                   <td className={styles.gutter}>
                     <DiffGutter diff={diffInfo} />
@@ -442,14 +535,17 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
                   >
                     {isRemoved ? line.oldLineNumber : line.newLineNumber}
                   </td>
-                  <td
-                    className={styles.lineContent}
-                    dangerouslySetInnerHTML={{
-                      __html: isRemoved
-                        ? (line.highlightKey && highlightedRemovedLines.get(line.highlightKey)) || escapeHtml(line.content)
-                        : (line.content || '&nbsp;'),
-                    }}
-                  />
+                  <td className={styles.lineContent}>
+                    {isRemoved ? (
+                      <span
+                        dangerouslySetInnerHTML={{
+                          __html: (line.highlightKey && highlightedRemovedLines.get(line.highlightKey)) || escapeHtml(line.content),
+                        }}
+                      />
+                    ) : (
+                      renderTokenLine(lineNum !== null ? highlightedLines[lineNum - 1] : undefined, handleTokenClick)
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -458,6 +554,34 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
       </div>
     </div>
   );
+}
+
+function renderTokenLine(
+  tokens: TokenInfo[] | undefined,
+  onTokenClick: (e: React.MouseEvent<HTMLSpanElement>) => void,
+): React.ReactNode {
+  if (!tokens || tokens.length === 0) return <>&nbsp;</>;
+
+  return tokens.map((token, i) => {
+    if (token.isClickable) {
+      return (
+        <span
+          key={i}
+          style={{ color: token.color }}
+          className={styles.clickableToken}
+          data-offset={token.offset}
+          onClick={onTokenClick}
+        >
+          {token.content}
+        </span>
+      );
+    }
+    return (
+      <span key={i} style={{ color: token.color }}>
+        {token.content}
+      </span>
+    );
+  });
 }
 
 function escapeHtml(text: string): string {

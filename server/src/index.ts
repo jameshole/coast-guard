@@ -6,6 +6,7 @@ import { createServer as createHttpServer, Server as HttpServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { FileService } from './services/fileService.js';
 import { GitService } from './services/gitService.js';
+import { TypeScriptService } from './services/typescriptService.js';
 import { WatchService, FileChangeEvent } from './services/watchService.js';
 import { createFilesRouter } from './routes/files.js';
 import { createGitRouter } from './routes/git.js';
@@ -19,13 +20,14 @@ export function createServer(config: ServerConfig): Express {
   // Initialize services
   const fileService = new FileService(config.projectPath);
   const gitService = new GitService(config.projectPath);
+  const tsService = new TypeScriptService(config.projectPath);
 
   // Middleware
   app.use(cors());
   app.use(express.json());
 
   // API Routes
-  app.use('/api/files', createFilesRouter(fileService));
+  app.use('/api/files', createFilesRouter(fileService, tsService));
   app.use('/api/git', createGitRouter(gitService));
 
   // Project info endpoint

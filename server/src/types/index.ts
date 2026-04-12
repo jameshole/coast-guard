@@ -32,6 +32,13 @@ export interface FileDiff {
   } | null;
 }
 
+export interface DefinitionResult {
+  filePath: string;
+  line: number;
+  column: number;
+  context: string;
+}
+
 export interface ServerConfig {
   projectPath: string;
   port: number;

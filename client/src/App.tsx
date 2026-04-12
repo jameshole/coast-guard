@@ -5,8 +5,11 @@ import { Sidebar } from './components/Sidebar';
 import { CodeViewer } from './components/CodeViewer';
 import { MarkdownViewer } from './components/MarkdownViewer';
 import { CommandPalette } from './components/CommandPalette';
+import { DefinitionPicker } from './components/DefinitionPicker';
 import { CommentPanel } from './components/CommentPanel';
 import type { Comment } from './components/CommentPanel';
+import type { DefinitionResult } from './types';
+import { api } from './services/api';
 import { useFileWatcher } from './hooks/useFileWatcher';
 import { useProjectInfo } from './hooks/useFileTree';
 
@@ -33,6 +36,12 @@ function AppContent() {
   const [markdownCodeView, setMarkdownCodeView] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ startLine: number; endLine: number } | null>(null);
+  const [targetLine, setTargetLine] = useState<number | null>(null);
+  const [definitionResults, setDefinitionResults] = useState<DefinitionResult[]>([]);
+  const [definitionSymbol, setDefinitionSymbol] = useState('');
+  const [isDefinitionPickerOpen, setIsDefinitionPickerOpen] = useState(false);
+  const [isDefinitionLoading, setIsDefinitionLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const { data: projectInfo } = useProjectInfo();
 
   // Connect to file watcher for live updates
@@ -53,6 +62,42 @@ function AppContent() {
 
   const handleFileSelect = useCallback((path: string) => {
     setSelectedFile(path);
+    setPendingSelection(null);
+    setTargetLine(null);
+    setMarkdownCodeView(false);
+  }, []);
+
+  const handleGoToDefinition = useCallback(async (filePath: string, offset: number) => {
+    setIsDefinitionLoading(true);
+    try {
+      const results = await api.getDefinition(filePath, offset);
+
+      if (results.length === 0) {
+        console.error('Go to definition: no results', { filePath, offset });
+        setToast('Definition not found');
+        return;
+      }
+
+      if (results.length === 1) {
+        setSelectedFile(results[0].filePath);
+        setTargetLine(results[0].line);
+        setPendingSelection(null);
+        setMarkdownCodeView(false);
+      } else {
+        setDefinitionSymbol('');
+        setDefinitionResults(results);
+        setIsDefinitionPickerOpen(true);
+      }
+    } catch (err) {
+      console.error('Definition search failed:', err);
+    } finally {
+      setIsDefinitionLoading(false);
+    }
+  }, []);
+
+  const handleDefinitionSelect = useCallback((result: DefinitionResult) => {
+    setSelectedFile(result.filePath);
+    setTargetLine(result.line);
     setPendingSelection(null);
     setMarkdownCodeView(false);
   }, []);
@@ -133,6 +178,8 @@ function AppContent() {
         selectedLines={pendingSelection}
         onLineSelectionComplete={handleLineSelectionComplete}
         commentedLines={commentedLines}
+        onGoToDefinition={handleGoToDefinition}
+        targetLine={targetLine}
       />
     );
   };
@@ -203,7 +250,84 @@ function AppContent() {
         onClose={() => setIsCommandPaletteOpen(false)}
         onSelectFile={handleFileSelect}
       />
+      <DefinitionPicker
+        results={definitionResults}
+        symbol={definitionSymbol}
+        isOpen={isDefinitionPickerOpen}
+        onClose={() => setIsDefinitionPickerOpen(false)}
+        onSelect={handleDefinitionSelect}
+      />
+      {isDefinitionLoading && <LoadingBar />}
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </>
+  );
+}
+
+function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  const [exiting, setExiting] = useState(false);
+  const duration = 3000;
+  const animDuration = 150;
+
+  useEffect(() => {
+    const exitTimer = setTimeout(() => setExiting(true), duration - animDuration);
+    const doneTimer = setTimeout(onDone, duration);
+    return () => { clearTimeout(exitTimer); clearTimeout(doneTimer); };
+  }, [onDone]);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: '16px',
+      right: '16px',
+      background: 'var(--bg-secondary)',
+      border: '1px solid rgba(248, 81, 73, 0.4)',
+      borderRadius: '6px',
+      padding: '8px 16px',
+      fontSize: '13px',
+      color: '#f85149',
+      zIndex: 9999,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      animation: `${exiting ? 'toastOut' : 'toastIn'} ${animDuration}ms ease-${exiting ? 'in' : 'out'} forwards`,
+    }}>
+      {message}
+      <style>{`
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes toastOut {
+          from { opacity: 1; transform: translateY(0); }
+          to { opacity: 0; transform: translateY(8px); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function LoadingBar() {
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: '2px',
+      overflow: 'hidden',
+      zIndex: 9999,
+    }}>
+      <div style={{
+        height: '100%',
+        width: '40%',
+        background: 'var(--text-accent)',
+        animation: 'loadingSlide 1s ease-in-out infinite',
+      }} />
+      <style>{`
+        @keyframes loadingSlide {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
+    </div>
   );
 }
 
