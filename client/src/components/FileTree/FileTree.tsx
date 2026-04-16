@@ -3,6 +3,7 @@ import { Tree, NodeRendererProps, NodeApi, TreeApi } from 'react-arborist';
 import { ChevronRight, ChevronDown, Circle } from 'lucide-react';
 import { useFileTree } from '../../hooks/useFileTree';
 import { useChangedFiles } from '../../hooks/useGitStatus';
+import { useDiffBase } from '../../hooks/useDiffBase';
 import { getFileIcon, getFileIconColor } from './fileIcons';
 import type { FileNode, GitFileStatus } from '../../types';
 import styles from './FileTree.module.css';
@@ -74,7 +75,8 @@ export function FileTree({ onFileSelect, selectedFile }: FileTreeProps) {
 
   // Fetch root level
   const { data: rootNodes, isLoading: rootLoading } = useFileTree('');
-  const { data: changedFiles } = useChangedFiles();
+  const { baseRef } = useDiffBase();
+  const { data: changedFiles } = useChangedFiles(baseRef);
 
   // Measure container height
   useEffect(() => {

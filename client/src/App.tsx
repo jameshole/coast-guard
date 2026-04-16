@@ -12,6 +12,7 @@ import type { DefinitionResult } from './types';
 import { api } from './services/api';
 import { useFileWatcher } from './hooks/useFileWatcher';
 import { useProjectInfo } from './hooks/useFileTree';
+import { DiffBaseProvider } from './hooks/useDiffBase';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -334,7 +335,9 @@ function LoadingBar() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <DiffBaseProvider>
+        <AppContent />
+      </DiffBaseProvider>
     </QueryClientProvider>
   );
 }

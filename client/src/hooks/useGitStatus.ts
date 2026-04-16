@@ -17,6 +17,14 @@ export function useGitBranch() {
   });
 }
 
+export function useGitBranches() {
+  return useQuery({
+    queryKey: ['gitBranches'],
+    queryFn: api.getGitBranches,
+    staleTime: 60000,
+  });
+}
+
 export function useGitStatus() {
   return useQuery({
     queryKey: ['gitStatus'],
@@ -26,19 +34,26 @@ export function useGitStatus() {
   });
 }
 
-export function useChangedFiles() {
+export function useChangedFiles(baseRef: string = 'HEAD') {
   return useQuery({
-    queryKey: ['changedFiles'],
-    queryFn: api.getChangedFiles,
+    queryKey: ['changedFiles', baseRef],
+    queryFn: () => api.getChangedFiles(baseRef),
     staleTime: 10000,
     refetchInterval: 30000,
   });
 }
 
-export function useFileDiff(path: string | null, ignoreWhitespace: boolean = false) {
+export function useFileDiff(
+  path: string | null,
+  ignoreWhitespace: boolean = false,
+  baseRef: string = 'HEAD',
+) {
   return useQuery({
-    queryKey: ['fileDiff', path, ignoreWhitespace],
-    queryFn: () => (path ? api.getFileDiff(path, ignoreWhitespace) : Promise.resolve({ staged: null, unstaged: null })),
+    queryKey: ['fileDiff', path, ignoreWhitespace, baseRef],
+    queryFn: () =>
+      path
+        ? api.getFileDiff(path, ignoreWhitespace, baseRef)
+        : Promise.resolve({ staged: null, unstaged: null }),
     enabled: !!path,
     staleTime: 10000,
   });

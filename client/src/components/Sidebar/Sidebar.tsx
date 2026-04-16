@@ -3,6 +3,7 @@ import { FolderTree, GitBranch, MessageSquare, PanelLeftClose } from 'lucide-rea
 import { FileTree } from '../FileTree';
 import { GitChangedFiles } from '../GitChangedFiles';
 import { useChangedFiles } from '../../hooks/useGitStatus';
+import { useDiffBase } from '../../hooks/useDiffBase';
 import styles from './Sidebar.module.css';
 
 type TabType = 'explorer' | 'source-control' | 'comments';
@@ -22,7 +23,8 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
   const [resizing, setResizing] = useState(false);
   const [ctrlHeld, setCtrlHeld] = useState(false);
   const dragging = useRef(false);
-  const { data: changedFiles } = useChangedFiles();
+  const { baseRef } = useDiffBase();
+  const { data: changedFiles } = useChangedFiles(baseRef);
   const changedCount = changedFiles ? Object.keys(changedFiles).length : 0;
 
   useEffect(() => {

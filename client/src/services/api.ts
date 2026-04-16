@@ -42,13 +42,24 @@ export const api = {
 
   getGitBranch: (): Promise<{ branch: string | null }> => fetchJSON('/git/branch'),
 
+  getGitBranches: (): Promise<{ branches: string[] }> => fetchJSON('/git/branches'),
+
+  verifyGitRef: (ref: string): Promise<{ valid: boolean }> =>
+    fetchJSON(`/git/verify-ref?ref=${encodeURIComponent(ref)}`),
+
   getGitStatus: (): Promise<GitStatus> => fetchJSON('/git/status'),
 
-  getFileDiff: (file: string, ignoreWhitespace: boolean = false): Promise<FileDiff> =>
-    fetchJSON(`/git/diff?file=${encodeURIComponent(file)}&ignoreWhitespace=${ignoreWhitespace}`),
+  getFileDiff: (
+    file: string,
+    ignoreWhitespace: boolean = false,
+    baseRef: string = 'HEAD',
+  ): Promise<FileDiff> =>
+    fetchJSON(
+      `/git/diff?file=${encodeURIComponent(file)}&ignoreWhitespace=${ignoreWhitespace}&baseRef=${encodeURIComponent(baseRef)}`,
+    ),
 
-  getChangedFiles: (): Promise<Record<string, GitFileStatus>> =>
-    fetchJSON('/git/changed-files'),
+  getChangedFiles: (baseRef: string = 'HEAD'): Promise<Record<string, GitFileStatus>> =>
+    fetchJSON(`/git/changed-files?baseRef=${encodeURIComponent(baseRef)}`),
 
   // Definitions
   getDefinition: (filePath: string, offset: number): Promise<DefinitionResult[]> =>

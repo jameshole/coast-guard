@@ -26,6 +26,32 @@ export class GitService {
     }
   }
 
+  async listBranches(): Promise<string[]> {
+    try {
+      const result = await this.git.branchLocal();
+      return result.all;
+    } catch {
+      return [];
+    }
+  }
+
+  async verifyRef(ref: string): Promise<boolean> {
+    // Handle range syntax (a..b, a...b) - validate each side; empty side defaults to HEAD
+    const rangeMatch = ref.match(/^(.*?)(\.\.\.?)(.*)$/);
+    if (rangeMatch) {
+      const [, left, , right] = rangeMatch;
+      const leftOk = left === '' ? true : await this.verifyRef(left);
+      const rightOk = right === '' ? true : await this.verifyRef(right);
+      return leftOk && rightOk;
+    }
+    try {
+      const sha = await this.git.revparse(['--verify', '--quiet', `${ref}^{commit}`]);
+      return sha.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   async getStatus(): Promise<GitStatus> {
     try {
       const status: StatusResult = await this.git.status();
@@ -48,7 +74,11 @@ export class GitService {
     }
   }
 
-  async getFileDiff(filePath: string, ignoreWhitespace: boolean = false): Promise<FileDiff> {
+  async getFileDiff(
+    filePath: string,
+    ignoreWhitespace: boolean = false,
+    baseRef: string = 'HEAD',
+  ): Promise<FileDiff> {
     const result: FileDiff = {
       staged: null,
       unstaged: null,
@@ -57,16 +87,23 @@ export class GitService {
     try {
       const baseArgs = ignoreWhitespace ? ['-w'] : [];
 
-      // Get staged diff
-      const stagedRaw = await this.git.diff([...baseArgs, '--cached', '--', filePath]);
-      if (stagedRaw) {
-        result.staged = this.parseDiff(stagedRaw);
-      }
+      if (baseRef === 'HEAD') {
+        // Default behavior: split staged vs unstaged
+        const stagedRaw = await this.git.diff([...baseArgs, '--cached', '--', filePath]);
+        if (stagedRaw) {
+          result.staged = this.parseDiff(stagedRaw);
+        }
 
-      // Get unstaged diff
-      const unstagedRaw = await this.git.diff([...baseArgs, '--', filePath]);
-      if (unstagedRaw) {
-        result.unstaged = this.parseDiff(unstagedRaw);
+        const unstagedRaw = await this.git.diff([...baseArgs, '--', filePath]);
+        if (unstagedRaw) {
+          result.unstaged = this.parseDiff(unstagedRaw);
+        }
+      } else {
+        // Custom base: combined diff from base → working tree (no staged/unstaged split)
+        const combinedRaw = await this.git.diff([...baseArgs, baseRef, '--', filePath]);
+        if (combinedRaw) {
+          result.unstaged = this.parseDiff(combinedRaw);
+        }
       }
     } catch (error) {
       console.error('Error getting diff for', filePath, error);
@@ -148,20 +185,43 @@ export class GitService {
     return { additions, deletions, hunks };
   }
 
-  async getAllChangedFiles(): Promise<Map<string, 'modified' | 'staged' | 'untracked'>> {
-    const status = await this.getStatus();
+  async getAllChangedFiles(
+    baseRef: string = 'HEAD',
+  ): Promise<Map<string, 'modified' | 'staged' | 'untracked'>> {
     const fileMap = new Map<string, 'modified' | 'staged' | 'untracked'>();
 
-    for (const file of status.staged) {
-      fileMap.set(file, 'staged');
-    }
+    if (baseRef === 'HEAD') {
+      const status = await this.getStatus();
 
-    for (const file of status.modified) {
-      if (!fileMap.has(file)) {
-        fileMap.set(file, 'modified');
+      for (const file of status.staged) {
+        fileMap.set(file, 'staged');
       }
+
+      for (const file of status.modified) {
+        if (!fileMap.has(file)) {
+          fileMap.set(file, 'modified');
+        }
+      }
+
+      for (const file of status.untracked) {
+        fileMap.set(file, 'untracked');
+      }
+
+      return fileMap;
     }
 
+    // Custom base: combined changes since base + untracked
+    const diffOutput = await this.git.diff(['--name-only', baseRef]);
+    const changedPaths = diffOutput
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    for (const file of changedPaths) {
+      fileMap.set(file, 'modified');
+    }
+
+    const status = await this.getStatus();
     for (const file of status.untracked) {
       fileMap.set(file, 'untracked');
     }

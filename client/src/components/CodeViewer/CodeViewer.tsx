@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import { useFileContent } from '../../hooks/useFileContent';
 import { useFileDiff } from '../../hooks/useGitStatus';
+import { useDiffBase } from '../../hooks/useDiffBase';
 import { DiffGutter } from './DiffGutter';
 import type { LineDiff } from '../../types';
 import styles from './CodeViewer.module.css';
@@ -152,7 +153,8 @@ function isIdentifierToken(scopes: string[]): boolean {
 
 export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
-  const { data: diffData } = useFileDiff(filePath, ignoreWhitespace);
+  const { baseRef } = useDiffBase();
+  const { data: diffData } = useFileDiff(filePath, ignoreWhitespace, baseRef);
   const [highlightedLines, setHighlightedLines] = useState<TokenInfo[][]>([]);
   const [highlightedRemovedLines, setHighlightedRemovedLines] = useState<Map<string, string>>(new Map());
   const [isHighlighting, setIsHighlighting] = useState(false);

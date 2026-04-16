@@ -24,6 +24,27 @@ export function createGitRouter(gitService: GitService): Router {
     }
   });
 
+  // List local branches (for the diff-base dropdown)
+  router.get('/branches', async (_req: Request, res: Response) => {
+    try {
+      const branches = await gitService.listBranches();
+      res.json({ branches });
+    } catch (error) {
+      res.json({ branches: [] });
+    }
+  });
+
+  // Verify a ref exists (used to validate custom diff base input)
+  router.get('/verify-ref', async (req: Request, res: Response) => {
+    const ref = req.query.ref as string;
+    if (!ref) {
+      res.status(400).json({ error: 'ref is required' });
+      return;
+    }
+    const valid = await gitService.verifyRef(ref);
+    res.json({ valid });
+  });
+
   // Get git status (modified, staged, untracked files)
   router.get('/status', async (_req: Request, res: Response) => {
     try {
@@ -46,7 +67,17 @@ export function createGitRouter(gitService: GitService): Router {
       }
 
       const ignoreWhitespace = req.query.ignoreWhitespace === 'true';
-      const diff = await gitService.getFileDiff(file, ignoreWhitespace);
+      const baseRef = (req.query.baseRef as string) || 'HEAD';
+
+      if (baseRef !== 'HEAD') {
+        const valid = await gitService.verifyRef(baseRef);
+        if (!valid) {
+          res.status(400).json({ error: `Invalid git ref: ${baseRef}` });
+          return;
+        }
+      }
+
+      const diff = await gitService.getFileDiff(file, ignoreWhitespace, baseRef);
       res.json(diff);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -55,9 +86,19 @@ export function createGitRouter(gitService: GitService): Router {
   });
 
   // Get all changed files with their status
-  router.get('/changed-files', async (_req: Request, res: Response) => {
+  router.get('/changed-files', async (req: Request, res: Response) => {
     try {
-      const changedFiles = await gitService.getAllChangedFiles();
+      const baseRef = (req.query.baseRef as string) || 'HEAD';
+
+      if (baseRef !== 'HEAD') {
+        const valid = await gitService.verifyRef(baseRef);
+        if (!valid) {
+          res.status(400).json({ error: `Invalid git ref: ${baseRef}` });
+          return;
+        }
+      }
+
+      const changedFiles = await gitService.getAllChangedFiles(baseRef);
       res.json(Object.fromEntries(changedFiles));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

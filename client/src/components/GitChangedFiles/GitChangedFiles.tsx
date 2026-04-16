@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { Circle } from 'lucide-react';
 import { useChangedFiles } from '../../hooks/useGitStatus';
+import { useDiffBase } from '../../hooks/useDiffBase';
 import { getFileIcon, getFileIconColor } from '../FileTree/fileIcons';
 import type { GitFileStatus } from '../../types';
+import { DiffBasePicker } from './DiffBasePicker';
 import styles from './GitChangedFiles.module.css';
 
 interface GitChangedFilesProps {
@@ -29,7 +31,8 @@ const statusColor: Record<GitFileStatus, string> = {
 };
 
 export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesProps) {
-  const { data: changedFiles, isLoading } = useChangedFiles();
+  const { baseRef } = useDiffBase();
+  const { data: changedFiles, isLoading } = useChangedFiles(baseRef);
 
   const files = useMemo((): ChangedFile[] => {
     if (!changedFiles) return [];
@@ -48,48 +51,45 @@ export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesP
       });
   }, [changedFiles]);
 
-  if (isLoading) {
-    return (
-      <div className={styles.loading}>
-        <span>Loading...</span>
-      </div>
-    );
-  }
-
-  if (files.length === 0) {
-    return (
-      <div className={styles.empty}>
-        <span>No changes</span>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
-      {files.map((file) => {
-        const Icon = getFileIcon(file.name, false, false);
-        const iconColor = getFileIconColor(file.name, false);
-        const isSelected = selectedFile === file.path;
-
-        return (
-          <div
-            key={file.path}
-            className={`${styles.file} ${isSelected ? styles.selected : ''}`}
-            onClick={() => onFileSelect(file.path)}
-            title={file.path}
-          >
-            <Icon size={16} style={{ color: iconColor }} className={styles.icon} />
-            <span className={styles.name}>{file.name}</span>
-            <span className={styles.path}>{file.path.split('/').slice(0, -1).join('/')}</span>
-            <Circle
-              size={8}
-              fill={statusColor[file.status]}
-              stroke="none"
-              className={styles.statusDot}
-            />
+      <DiffBasePicker />
+      <div className={styles.fileList}>
+        {isLoading ? (
+          <div className={styles.loading}>
+            <span>Loading...</span>
           </div>
-        );
-      })}
+        ) : files.length === 0 ? (
+          <div className={styles.empty}>
+            <span>No changes</span>
+          </div>
+        ) : (
+          files.map((file) => {
+            const Icon = getFileIcon(file.name, false, false);
+            const iconColor = getFileIconColor(file.name, false);
+            const isSelected = selectedFile === file.path;
+
+            return (
+              <div
+                key={file.path}
+                className={`${styles.file} ${isSelected ? styles.selected : ''}`}
+                onClick={() => onFileSelect(file.path)}
+                title={file.path}
+              >
+                <Icon size={16} style={{ color: iconColor }} className={styles.icon} />
+                <span className={styles.name}>{file.name}</span>
+                <span className={styles.path}>{file.path.split('/').slice(0, -1).join('/')}</span>
+                <Circle
+                  size={8}
+                  fill={statusColor[file.status]}
+                  stroke="none"
+                  className={styles.statusDot}
+                />
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
