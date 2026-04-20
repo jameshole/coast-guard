@@ -56,10 +56,15 @@ export class GitService {
     try {
       const status: StatusResult = await this.git.status();
 
+      // simple-git puts `git add -N` (intent-to-add) files in `created` but leaves
+      // them out of `staged` and `not_added`, so treat them as untracked.
+      const stagedSet = new Set(status.staged);
+      const intentToAdd = status.created.filter((f) => !stagedSet.has(f));
+
       return {
         modified: status.modified,
         staged: status.staged,
-        untracked: status.not_added,
+        untracked: [...status.not_added, ...intentToAdd],
         deleted: status.deleted,
         renamed: status.renamed.map((r) => ({ from: r.from, to: r.to })),
       };
