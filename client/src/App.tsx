@@ -28,10 +28,27 @@ function isMarkdownFile(path: string): boolean {
   return ext === 'md' || ext === 'mdx';
 }
 
+function fileToUrl(path: string | null): string {
+  if (!path) return '/';
+  return '/' + path.split('/').map(encodeURIComponent).join('/');
+}
+
+function urlToFile(pathname: string): string | null {
+  const stripped = pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!stripped) return null;
+  try {
+    return stripped.split('/').map(decodeURIComponent).join('/');
+  } catch {
+    return null;
+  }
+}
+
 let commentIdCounter = 0;
 
 function AppContent() {
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(() =>
+    urlToFile(window.location.pathname),
+  );
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [markdownCodeView, setMarkdownCodeView] = useState(false);
@@ -60,6 +77,26 @@ function AppContent() {
       document.title = repoName;
     }
   }, [selectedFile, projectInfo?.name]);
+
+  // Sync the selected file to the URL so browser history navigates between files
+  useEffect(() => {
+    const expected = fileToUrl(selectedFile);
+    if (window.location.pathname !== expected) {
+      window.history.pushState(null, '', expected);
+    }
+  }, [selectedFile]);
+
+  // Respond to browser back/forward by loading whatever file the URL points at
+  useEffect(() => {
+    const handlePopState = () => {
+      setSelectedFile(urlToFile(window.location.pathname));
+      setPendingSelection(null);
+      setTargetLine(null);
+      setMarkdownCodeView(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const handleFileSelect = useCallback((path: string) => {
     setSelectedFile(path);
