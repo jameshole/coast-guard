@@ -178,7 +178,7 @@ function AppContent() {
     setPendingSelection(null);
   }, []);
 
-  // Set of line numbers that have comments in the current file
+  // Set of line numbers that have comments in the current file (used by per-line code views)
   const commentedLines = useMemo(() => {
     if (!selectedFile) return new Set<number>();
     const lines = new Set<number>();
@@ -190,6 +190,15 @@ function AppContent() {
       }
     }
     return lines;
+  }, [comments, selectedFile]);
+
+  // Comment ranges for the current file (used by markdown block highlighting, where only
+  // the block whose range exactly matches a comment should be highlighted — not its ancestors).
+  const commentRanges = useMemo(() => {
+    if (!selectedFile) return [];
+    return comments
+      .filter((c) => c.filePath === selectedFile)
+      .map((c) => ({ startLine: c.startLine, endLine: c.endLine }));
   }, [comments, selectedFile]);
 
   // Render appropriate viewer based on file type
@@ -204,7 +213,7 @@ function AppContent() {
           filePath={selectedFile}
           selectedLines={pendingSelection}
           onLineSelectionComplete={handleLineSelectionComplete}
-          commentedLines={commentedLines}
+          commentRanges={commentRanges}
         />
       );
     }

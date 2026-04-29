@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createHighlighter, type Highlighter } from 'shiki';
@@ -7,11 +7,16 @@ import { useFileContent } from '../../hooks/useFileContent';
 import { api } from '../../services/api';
 import styles from './MarkdownViewer.module.css';
 
+interface LineRange {
+  startLine: number;
+  endLine: number;
+}
+
 interface MarkdownViewerProps {
   filePath: string;
   onLineSelectionComplete?: (startLine: number, endLine: number) => void;
-  selectedLines?: { startLine: number; endLine: number } | null;
-  commentedLines?: Set<number>;
+  selectedLines?: LineRange | null;
+  commentRanges?: LineRange[];
 }
 
 // Highlighter singleton for code blocks
@@ -174,19 +179,28 @@ function getTextContent(node: any): string {
   return '';
 }
 
+/** True if the block's line range exactly matches a target range */
+function matchesRange(
+  startLine: number,
+  endLine: number,
+  range: LineRange | null | undefined,
+): boolean {
+  return !!range && range.startLine === startLine && range.endLine === endLine;
+}
+
 /** Wraps a block-level markdown element with selectable line-range behavior */
 function SelectableBlock({
   node,
   children,
   onSelect,
   selectedLines,
-  commentedLines,
+  commentRanges,
 }: {
   node: any;
   children: ReactNode;
   onSelect?: (startLine: number, endLine: number) => void;
-  selectedLines?: { startLine: number; endLine: number } | null;
-  commentedLines?: Set<number>;
+  selectedLines?: LineRange | null;
+  commentRanges?: LineRange[];
 }) {
   const startLine = node?.position?.start?.line;
   const endLine = node?.position?.end?.line;
@@ -195,16 +209,10 @@ function SelectableBlock({
     return <>{children}</>;
   }
 
-  const isSelected =
-    selectedLines &&
-    startLine <= selectedLines.endLine &&
-    endLine >= selectedLines.startLine;
-
-  const hasComment = commentedLines
-    ? Array.from({ length: endLine - startLine + 1 }, (_, i) => startLine + i).some(
-        (l) => commentedLines.has(l)
-      )
-    : false;
+  // Match exactly so an outer block (e.g. a parent <ul>) doesn't also light up
+  // when a nested block is selected/commented.
+  const isSelected = matchesRange(startLine, endLine, selectedLines);
+  const hasComment = !!commentRanges?.some((r) => matchesRange(startLine, endLine, r));
 
   return (
     <div
@@ -212,6 +220,8 @@ function SelectableBlock({
       onClick={(e) => {
         // Don't trigger on checkbox clicks or link clicks
         if ((e.target as HTMLElement).closest('input, a')) return;
+        // Stop bubbling so an outer selectable block (e.g. the parent <ul>) doesn't overwrite this selection
+        e.stopPropagation();
         onSelect?.(startLine, endLine);
       }}
     >
@@ -230,16 +240,59 @@ function SelectableBlock({
 function makeSelectableComponent(
   Tag: string,
   onSelect?: (startLine: number, endLine: number) => void,
-  selectedLines?: { startLine: number; endLine: number } | null,
-  commentedLines?: Set<number>,
+  selectedLines?: LineRange | null,
+  commentRanges?: LineRange[],
 ) {
+  // <li> can't be wrapped in a <div> (invalid HTML inside <ul>/<ol>), so apply the
+  // selectable behavior directly to the <li> element itself.
+  if (Tag === 'li') {
+    return function SelectableLi({ node, children, className, ...props }: any) {
+      const startLine = node?.position?.start?.line;
+      const endLine = node?.position?.end?.line;
+
+      if (!startLine || !endLine) {
+        return <li className={className} {...props}>{children}</li>;
+      }
+
+      const isSelected = matchesRange(startLine, endLine, selectedLines);
+      const hasComment = !!commentRanges?.some((r) => matchesRange(startLine, endLine, r));
+
+      const combinedClassName = [
+        className,
+        styles.selectableBlock,
+        isSelected ? styles.selectedBlock : '',
+        hasComment ? styles.commentedBlock : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      return (
+        <li
+          {...props}
+          className={combinedClassName}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('input, a')) return;
+            // Stop bubbling so the parent <ul>/<ol> (or an ancestor <li>) doesn't overwrite this selection
+            e.stopPropagation();
+            onSelect?.(startLine, endLine);
+          }}
+        >
+          <span className={styles.lineLabel}>
+            {startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`}
+          </span>
+          {children}
+        </li>
+      );
+    };
+  }
+
   return function WrappedComponent({ node, children, ...props }: any) {
     return (
       <SelectableBlock
         node={node}
         onSelect={onSelect}
         selectedLines={selectedLines}
-        commentedLines={commentedLines}
+        commentRanges={commentRanges}
       >
         <Tag {...props}>{children}</Tag>
       </SelectableBlock>
@@ -247,10 +300,19 @@ function makeSelectableComponent(
   };
 }
 
-export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLines, commentedLines }: MarkdownViewerProps) {
+export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLines, commentRanges }: MarkdownViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const queryClient = useQueryClient();
   const checkboxIndexRef = useRef(0);
+
+  // Per-line set of commented lines for the code-fence viewer (which highlights individual lines).
+  const commentedLines = useMemo(() => {
+    const lines = new Set<number>();
+    for (const r of commentRanges ?? []) {
+      for (let i = r.startLine; i <= r.endLine; i++) lines.add(i);
+    }
+    return lines;
+  }, [commentRanges]);
 
   // Reset checkbox index on each render
   checkboxIndexRef.current = 0;
@@ -287,10 +349,10 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
   const content = fileData?.content || '';
 
   // Build selectable wrappers for block-level elements
-  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'blockquote', 'table', 'hr'] as const;
+  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'table', 'hr'] as const;
   const selectableComponents: Record<string, any> = {};
   for (const tag of blockTags) {
-    selectableComponents[tag] = makeSelectableComponent(tag, onLineSelectionComplete, selectedLines, commentedLines);
+    selectableComponents[tag] = makeSelectableComponent(tag, onLineSelectionComplete, selectedLines, commentRanges);
   }
 
   return (

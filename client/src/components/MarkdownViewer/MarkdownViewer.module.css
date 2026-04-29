@@ -257,6 +257,16 @@
   opacity: 1;
 }
 
+/* When a nested selectable block is hovered, suppress the ancestor's hover styling
+   so only the innermost block under the cursor gets highlighted. */
+.selectableBlock:hover:has(.selectableBlock:hover) {
+  background: transparent;
+}
+
+.selectableBlock:hover:has(.selectableBlock:hover) > .lineLabel {
+  opacity: 0;
+}
+
 .selectedBlock {
   background: rgba(79, 193, 255, 0.15) !important;
 }
