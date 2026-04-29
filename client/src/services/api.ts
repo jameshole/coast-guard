@@ -1,4 +1,4 @@
-import type { FileNode, GitStatus, FileDiff, ProjectInfo, GitFileStatus, DefinitionResult } from '../types';
+import type { FileNode, GitStatus, FileDiff, ProjectInfo, GitFileStatus, DefinitionResult, DiffStats } from '../types';
 
 const API_BASE = '/api';
 
@@ -60,6 +60,9 @@ export const api = {
 
   getChangedFiles: (baseRef: string = 'HEAD'): Promise<Record<string, GitFileStatus>> =>
     fetchJSON(`/git/changed-files?baseRef=${encodeURIComponent(baseRef)}`),
+
+  getDiffStats: (baseRef: string = 'HEAD'): Promise<DiffStats> =>
+    fetchJSON(`/git/diff-stats?baseRef=${encodeURIComponent(baseRef)}`),
 
   // Definitions
   getDefinition: (filePath: string, offset: number): Promise<DefinitionResult[]> =>

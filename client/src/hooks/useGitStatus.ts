@@ -43,6 +43,15 @@ export function useChangedFiles(baseRef: string = 'HEAD') {
   });
 }
 
+export function useDiffStats(baseRef: string = 'HEAD') {
+  return useQuery({
+    queryKey: ['diffStats', baseRef],
+    queryFn: () => api.getDiffStats(baseRef),
+    staleTime: 10000,
+    refetchInterval: 30000,
+  });
+}
+
 export function useFileDiff(
   path: string | null,
   ignoreWhitespace: boolean = false,

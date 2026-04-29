@@ -37,6 +37,12 @@ export interface ProjectInfo {
 
 export type GitFileStatus = 'modified' | 'staged' | 'untracked';
 
+export interface DiffStats {
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
 export interface DefinitionResult {
   filePath: string;
   line: number;

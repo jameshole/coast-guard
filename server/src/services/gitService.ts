@@ -1,10 +1,14 @@
 import { simpleGit, SimpleGit, StatusResult } from 'simple-git';
-import type { GitStatus, FileDiff, LineDiff } from '../types/index.js';
+import { promises as fs } from 'fs';
+import path from 'path';
+import type { GitStatus, FileDiff, LineDiff, DiffStats } from '../types/index.js';
 
 export class GitService {
   private git: SimpleGit;
+  private projectPath: string;
 
   constructor(projectPath: string) {
+    this.projectPath = projectPath;
     this.git = simpleGit(projectPath);
   }
 
@@ -188,6 +192,48 @@ export class GitService {
     }
 
     return { additions, deletions, hunks };
+  }
+
+  async getDiffStats(baseRef: string = 'HEAD'): Promise<DiffStats> {
+    let insertions = 0;
+    let deletions = 0;
+    let filesChanged = 0;
+
+    try {
+      const summary = await this.git.diffSummary([baseRef]);
+      insertions = summary.insertions;
+      deletions = summary.deletions;
+      filesChanged = summary.changed;
+    } catch {
+      // ignore — diff summary failed (e.g. invalid ref)
+    }
+
+    // simple-git's diff covers tracked + intent-to-add changes. Pure untracked
+    // files (`not_added`) are listed in the changed-files panel but not in the
+    // diff, so count their lines manually to keep the totals consistent.
+    try {
+      const status = await this.git.status();
+      for (const file of status.not_added) {
+        try {
+          const content = await fs.readFile(path.join(this.projectPath, file), 'utf-8');
+          if (content.length === 0) {
+            filesChanged += 1;
+            continue;
+          }
+          const lineCount = content.endsWith('\n')
+            ? content.split('\n').length - 1
+            : content.split('\n').length;
+          insertions += lineCount;
+          filesChanged += 1;
+        } catch {
+          // unreadable / binary — skip
+        }
+      }
+    } catch {
+      // status failed
+    }
+
+    return { filesChanged, insertions, deletions };
   }
 
   async getAllChangedFiles(

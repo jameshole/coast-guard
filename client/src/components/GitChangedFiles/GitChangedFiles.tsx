@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Circle } from 'lucide-react';
-import { useChangedFiles } from '../../hooks/useGitStatus';
+import { useChangedFiles, useDiffStats } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
 import { getFileIcon, getFileIconColor } from '../FileTree/fileIcons';
 import type { GitFileStatus } from '../../types';
@@ -33,6 +33,7 @@ const statusColor: Record<GitFileStatus, string> = {
 export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesProps) {
   const { baseRef } = useDiffBase();
   const { data: changedFiles, isLoading } = useChangedFiles(baseRef);
+  const { data: diffStats } = useDiffStats(baseRef);
 
   const files = useMemo((): ChangedFile[] => {
     if (!changedFiles) return [];
@@ -51,9 +52,24 @@ export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesP
       });
   }, [changedFiles]);
 
+  const hasStats =
+    diffStats && (diffStats.filesChanged > 0 || diffStats.insertions > 0 || diffStats.deletions > 0);
+
   return (
     <div className={styles.container}>
       <DiffBasePicker />
+      {hasStats && (
+        <div
+          className={styles.stats}
+          title={`${diffStats.filesChanged} file${diffStats.filesChanged === 1 ? '' : 's'} changed, ${diffStats.insertions} insertion${diffStats.insertions === 1 ? '' : 's'}(+), ${diffStats.deletions} deletion${diffStats.deletions === 1 ? '' : 's'}(-)`}
+        >
+          <span className={styles.statsFiles}>
+            {diffStats.filesChanged} file{diffStats.filesChanged === 1 ? '' : 's'}
+          </span>
+          <span className={styles.statsAdditions}>+{diffStats.insertions}</span>
+          <span className={styles.statsDeletions}>−{diffStats.deletions}</span>
+        </div>
+      )}
       <div className={styles.fileList}>
         {isLoading ? (
           <div className={styles.loading}>

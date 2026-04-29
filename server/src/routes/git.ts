@@ -85,6 +85,27 @@ export function createGitRouter(gitService: GitService): Router {
     }
   });
 
+  // Get aggregate diff stats (insertions/deletions/files) for a base ref
+  router.get('/diff-stats', async (req: Request, res: Response) => {
+    try {
+      const baseRef = (req.query.baseRef as string) || 'HEAD';
+
+      if (baseRef !== 'HEAD') {
+        const valid = await gitService.verifyRef(baseRef);
+        if (!valid) {
+          res.status(400).json({ error: `Invalid git ref: ${baseRef}` });
+          return;
+        }
+      }
+
+      const stats = await gitService.getDiffStats(baseRef);
+      res.json(stats);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: message });
+    }
+  });
+
   // Get all changed files with their status
   router.get('/changed-files', async (req: Request, res: Response) => {
     try {
