@@ -67,7 +67,7 @@ export function CommentPanel({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmitComment();
     }
@@ -138,7 +138,7 @@ export function CommentPanel({
               value={newCommentBody}
               onChange={(e) => setNewCommentBody(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Add your comment... (Cmd+Enter to submit)"
+              placeholder="Add your comment... (Enter to submit, Shift+Enter for newline)"
               autoFocus
               rows={3}
             />
