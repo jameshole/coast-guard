@@ -1,46 +1,46 @@
-/* VS Code Dark+ inspired theme */
+/* thread-claude inspired terminal theme */
 :root {
   /* Backgrounds */
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #252526;
-  --bg-tertiary: #2d2d2d;
-  --bg-hover: #2a2d2e;
-  --bg-selected: #094771;
-  --bg-active: #37373d;
+  --bg-primary: #0d1117;
+  --bg-secondary: #0a0e14;
+  --bg-tertiary: #161b22;
+  --bg-hover: #1c2128;
+  --bg-selected: rgba(94, 234, 212, 0.18);
+  --bg-active: #21262d;
 
   /* Text */
-  --text-primary: #d4d4d4;
-  --text-secondary: #808080;
-  --text-muted: #6a737d;
-  --text-accent: #4fc1ff;
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --text-accent: #5eead4;
 
   /* Borders */
-  --border-color: #3c3c3c;
-  --border-subtle: #2d2d2d;
+  --border-color: #21262d;
+  --border-subtle: #161b22;
 
   /* Scrollbar */
-  --scrollbar-thumb: #424242;
+  --scrollbar-thumb: #30363d;
   --scrollbar-track: transparent;
 
   /* Git diff colors - gutter markers */
-  --diff-staged-add: #2ea043;
-  --diff-staged-remove: #f85149;
-  --diff-unstaged-add: #238636;
-  --diff-unstaged-remove: #da3633;
+  --diff-staged-add: #5eead4;
+  --diff-staged-remove: #fb7185;
+  --diff-unstaged-add: #2dd4bf;
+  --diff-unstaged-remove: #f87171;
 
   /* Git diff colors - line backgrounds */
-  --diff-add-bg: rgba(46, 160, 67, 0.15);
-  --diff-remove-bg: rgba(248, 81, 73, 0.15);
+  --diff-add-bg: rgba(94, 234, 212, 0.10);
+  --diff-remove-bg: rgba(251, 113, 133, 0.10);
 
   /* Git file status colors */
-  --git-modified: #e2c08d;
-  --git-staged: #73c991;
-  --git-untracked: #73c991;
+  --git-modified: #fbbf24;
+  --git-staged: #5eead4;
+  --git-untracked: #86efac;
 
   /* Syntax highlighting is handled by Shiki theme */
 
   /* Fonts */
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
+  --font-mono: 'Berkeley Mono', 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   /* Sizing */
@@ -84,7 +84,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #484f58;
 }
 
 /* Selection */
