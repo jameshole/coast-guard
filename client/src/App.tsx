@@ -8,6 +8,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { DefinitionPicker } from './components/DefinitionPicker';
 import { CommentPanel } from './components/CommentPanel';
 import type { Comment } from './components/CommentPanel';
+import { ClaudeView } from './components/ClaudeView';
 import type { DefinitionResult } from './types';
 import { api } from './services/api';
 import { useFileWatcher } from './hooks/useFileWatcher';
@@ -60,6 +61,7 @@ function AppContent() {
   const [isDefinitionPickerOpen, setIsDefinitionPickerOpen] = useState(false);
   const [isDefinitionLoading, setIsDefinitionLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [mainView, setMainView] = useState<'editor' | 'claude'>('editor');
   const { data: projectInfo } = useProjectInfo();
 
   // Connect to file watcher for live updates
@@ -103,6 +105,7 @@ function AppContent() {
     setPendingSelection(null);
     setTargetLine(null);
     setMarkdownCodeView(false);
+    setMainView('editor');
   }, []);
 
   const handleGoToDefinition = useCallback(async (filePath: string, offset: number) => {
@@ -140,12 +143,16 @@ function AppContent() {
     setMarkdownCodeView(false);
   }, []);
 
-  // Global keyboard shortcut for cmd+k
+  // Global keyboard shortcuts: cmd+k command palette, cmd+j toggle Editor/Claude view
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsCommandPaletteOpen(true);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
+        e.preventDefault();
+        setMainView((v) => (v === 'editor' ? 'claude' : 'editor'));
       }
     };
 
@@ -203,6 +210,10 @@ function AppContent() {
 
   // Render appropriate viewer based on file type
   const renderMainContent = () => {
+    if (mainView === 'claude') {
+      return <ClaudeView />;
+    }
+
     if (!selectedFile) {
       return <CodeViewer filePath={null} />;
     }
@@ -291,6 +302,8 @@ function AppContent() {
         onToggleWhitespace={() => setIgnoreWhitespace(prev => !prev)}
         markdownCodeView={markdownCodeView}
         onToggleMarkdownCodeView={() => setMarkdownCodeView(prev => !prev)}
+        mainView={mainView}
+        onToggleMainView={() => setMainView(v => v === 'editor' ? 'claude' : 'editor')}
       />
       <CommandPalette
         isOpen={isCommandPaletteOpen}

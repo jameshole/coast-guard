@@ -1,0 +1,143 @@
+import { Router, Request, Response } from 'express';
+import { spawn } from 'child_process';
+import { ThreadStore, AssistantNode, UserNode } from '../services/threadStore.js';
+
+const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
+
+export function createClaudeRouter(projectPath: string): Router {
+  const router = Router();
+  const store = new ThreadStore(projectPath);
+
+  router.get('/thread', (_req: Request, res: Response) => {
+    res.json(store.get());
+  });
+
+  router.post('/thread/reset', (_req: Request, res: Response) => {
+    res.json(store.reset());
+  });
+
+  router.post('/thread/message', (req: Request, res: Response) => {
+    const { content } = (req.body || {}) as { content?: string };
+    if (!content || typeof content !== 'string') {
+      res.status(400).json({ error: 'content required' });
+      return;
+    }
+
+    const thread = store.get();
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const send = (channel: 'local' | 'claude', data: unknown): void => {
+      res.write(`event: ${channel}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const userNode: UserNode = {
+      id: `u${Date.now()}`,
+      role: 'user',
+      content,
+      ts: Date.now(),
+    };
+    store.appendNode(userNode);
+    send('local', { type: 'user_message', node: userNode });
+
+    const args = [
+      '-p', content,
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+      '--permission-mode', 'bypassPermissions',
+    ];
+    if (thread.turnCount === 0) {
+      args.push('--session-id', thread.id);
+    } else {
+      args.push('--resume', thread.id);
+    }
+
+    const cmdDisplay = `${CLAUDE_BIN} ${args
+      .map((a) => (/\s/.test(a) ? JSON.stringify(a) : a))
+      .join(' ')}`;
+    send('local', { type: 'turn_start', cmd: cmdDisplay, cwd: thread.cwd });
+
+    let child;
+    try {
+      child = spawn(CLAUDE_BIN, args, {
+        cwd: thread.cwd,
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      send('local', { type: 'error', message: `spawn failed: ${message}` });
+      res.end();
+      return;
+    }
+
+    const turnEvents: unknown[] = [];
+    let stdoutBuf = '';
+    let stderrBuf = '';
+    let finished = false;
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutBuf += chunk.toString('utf8');
+      let nl: number;
+      while ((nl = stdoutBuf.indexOf('\n')) >= 0) {
+        const line = stdoutBuf.slice(0, nl);
+        stdoutBuf = stdoutBuf.slice(nl + 1);
+        if (!line.trim()) continue;
+        try {
+          const obj = JSON.parse(line);
+          turnEvents.push(obj);
+          send('claude', obj);
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          send('local', { type: 'parse_error', line, message });
+        }
+      }
+    });
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      stderrBuf += text;
+      send('local', { type: 'stderr', text });
+    });
+
+    child.on('error', (err: Error) => {
+      send('local', { type: 'error', message: err.message });
+    });
+
+    child.on('close', (code, signal) => {
+      if (finished) return;
+      finished = true;
+      const assistantNode: AssistantNode = {
+        id: `a${Date.now()}`,
+        role: 'assistant',
+        events: turnEvents,
+        ts: Date.now(),
+        exitCode: code,
+        signal,
+      };
+      store.appendNode(assistantNode, { incrementTurn: true });
+      send('local', {
+        type: 'turn_end',
+        node: assistantNode,
+        code,
+        signal,
+        stderr: stderrBuf,
+      });
+      res.end();
+    });
+
+    res.on('close', () => {
+      if (!finished && child && child.exitCode == null) {
+        child.kill('SIGTERM');
+      }
+    });
+  });
+
+  return router;
+}

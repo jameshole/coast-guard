@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Code } from 'lucide-react';
+import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Code, FileText, MessageSquare } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import styles from './Header.module.css';
@@ -15,9 +15,11 @@ interface HeaderProps {
   onToggleWhitespace: () => void;
   markdownCodeView: boolean;
   onToggleMarkdownCodeView: () => void;
+  mainView: 'editor' | 'claude';
+  onToggleMainView: () => void;
 }
 
-export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, markdownCodeView, onToggleMarkdownCodeView }: HeaderProps) {
+export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, markdownCodeView, onToggleMarkdownCodeView, mainView, onToggleMainView }: HeaderProps) {
   const { data: projectInfo } = useProjectInfo();
   const { data: gitCheck } = useGitCheck();
   const { data: gitBranch } = useGitBranch();
@@ -160,6 +162,25 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, mark
           </button>
         </div>
       )}
+
+      <div className={styles.viewToggle}>
+        <button
+          className={`${styles.viewToggleButton} ${mainView === 'editor' ? styles.viewToggleButtonActive : ''}`}
+          onClick={() => mainView !== 'editor' && onToggleMainView()}
+          title="Editor (Cmd/Ctrl+J to toggle)"
+        >
+          <FileText size={14} />
+          <span>Editor</span>
+        </button>
+        <button
+          className={`${styles.viewToggleButton} ${mainView === 'claude' ? styles.viewToggleButtonActive : ''}`}
+          onClick={() => mainView !== 'claude' && onToggleMainView()}
+          title="Claude (Cmd/Ctrl+J to toggle)"
+        >
+          <MessageSquare size={14} />
+          <span>Claude</span>
+        </button>
+      </div>
 
       {gitCheck?.isGitRepo && gitBranch?.branch && (
         <div className={styles.gitInfo}>
