@@ -1,25 +1,30 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, RotateCcw, MessageSquare } from 'lucide-react';
+import { Send, Square, RotateCcw, MessageSquare, Wrench } from 'lucide-react';
 import { loadThread, resetThread, streamMessage } from './api';
 import { buildTurnBubbles } from './buildBubbles';
 import type { AssistantBubble, SystemNoteEvent } from './buildBubbles';
 import { MarkdownContent } from './MarkdownContent';
-import { ToolCall } from './ToolCall';
 import { ThinkingBlock } from './ThinkingBlock';
-import { SystemNote } from './SystemNote';
+import { ToolDrawer } from './ToolDrawer';
 import type { ClaudeEvent, Thread } from './types';
 import styles from './ClaudeView.module.css';
 
 type RenderItem =
   | { kind: 'user'; key: string; content: string }
   | { kind: 'assistant'; key: string; bubble: AssistantBubble; isStreaming: boolean }
-  | { kind: 'sys'; key: string; notes: SystemNoteEvent[] }
   | { kind: 'pending'; key: string }
   | { kind: 'error'; key: string; message: string };
 
 interface StreamingUser {
   id: string;
   content: string;
+}
+
+interface SessionInfo {
+  sessionId?: string;
+  model?: string;
+  toolsCount?: number;
+  permissionMode?: string;
 }
 
 export function ClaudeView() {
@@ -29,6 +34,7 @@ export function ClaudeView() {
   const [input, setInput] = useState('');
   const [streamingEvents, setStreamingEvents] = useState<ClaudeEvent[] | null>(null);
   const [streamingUser, setStreamingUser] = useState<StreamingUser | null>(null);
+  const [openToolMsgId, setOpenToolMsgId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -45,17 +51,26 @@ export function ClaudeView() {
 
   const isStreaming = streamingEvents !== null;
 
-  const renderItems = useMemo<RenderItem[]>(() => {
+  // Walk the thread once: build render items (no sys notes inline) and accumulate
+  // the latest init system note so we can show the session/model/tools chip in
+  // the bottom bar instead of repeating it every turn.
+  const { renderItems, sessionInfo } = useMemo(() => {
     const items: RenderItem[] = [];
-    if (!thread) return items;
+    let latestInit: SystemNoteEvent | undefined;
+    if (!thread) return { renderItems: items, sessionInfo: undefined };
+
+    const ingestNotes = (notes: SystemNoteEvent[]) => {
+      for (const n of notes) {
+        if (n.subtype === 'init') latestInit = n;
+      }
+    };
+
     for (const node of thread.nodes) {
       if (node.role === 'user') {
         items.push({ kind: 'user', key: `u-${node.id}`, content: node.content });
       } else {
         const t = buildTurnBubbles(node.events as ClaudeEvent[]);
-        if (t.systemNotes.length > 0) {
-          items.push({ kind: 'sys', key: `sys-${node.id}`, notes: t.systemNotes });
-        }
+        ingestNotes(t.systemNotes);
         for (const b of t.bubbles) {
           items.push({
             kind: 'assistant',
@@ -78,9 +93,7 @@ export function ClaudeView() {
     }
     if (streamingEvents !== null) {
       const t = buildTurnBubbles(streamingEvents);
-      if (t.systemNotes.length > 0) {
-        items.push({ kind: 'sys', key: 'stream-sys', notes: t.systemNotes });
-      }
+      ingestNotes(t.systemNotes);
       for (const b of t.bubbles) {
         items.push({
           kind: 'assistant',
@@ -96,8 +109,33 @@ export function ClaudeView() {
     if (chatError) {
       items.push({ kind: 'error', key: 'chat-error', message: chatError });
     }
-    return items;
+
+    let info: SessionInfo | undefined;
+    if (latestInit) {
+      info = {
+        sessionId: typeof latestInit.session_id === 'string' ? latestInit.session_id : undefined,
+        model: typeof latestInit.model === 'string' ? latestInit.model : undefined,
+        toolsCount: Array.isArray(latestInit.tools) ? latestInit.tools.length : undefined,
+        permissionMode:
+          typeof latestInit.permissionMode === 'string' ? latestInit.permissionMode : undefined,
+      };
+    }
+    return { renderItems: items, sessionInfo: info };
   }, [thread, streamingEvents, streamingUser, chatError]);
+
+  // Find the bubble whose drawer is currently open. If the bubble disappears
+  // (session reset, switch), close automatically.
+  const drawerBubble = useMemo<AssistantBubble | null>(() => {
+    if (!openToolMsgId) return null;
+    for (const it of renderItems) {
+      if (it.kind === 'assistant' && it.bubble.msgId === openToolMsgId) return it.bubble;
+    }
+    return null;
+  }, [openToolMsgId, renderItems]);
+
+  useEffect(() => {
+    if (openToolMsgId && !drawerBubble) setOpenToolMsgId(null);
+  }, [drawerBubble, openToolMsgId]);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -178,6 +216,7 @@ export function ClaudeView() {
       const fresh = await resetThread();
       setThread(fresh);
       setChatError(null);
+      setOpenToolMsgId(null);
       stickToBottomRef.current = true;
     } catch (err) {
       setChatError((err as Error).message);
@@ -197,6 +236,10 @@ export function ClaudeView() {
       void send();
     }
   };
+
+  const toggleTools = useCallback((msgId: string) => {
+    setOpenToolMsgId((prev) => (prev === msgId ? null : msgId));
+  }, []);
 
   if (loadError) {
     return (
@@ -233,77 +276,108 @@ export function ClaudeView() {
         </button>
       </div>
 
-      <div className={styles.scroll} ref={scrollRef} onScroll={handleScroll}>
-        {renderItems.length === 0 && !isStreaming ? (
-          <div className={styles.empty}>
-            <MessageSquare size={28} className={styles.emptyIcon} strokeWidth={1.4} />
-            <div className={styles.emptyTitle}>empty conversation</div>
-            <div className={styles.emptyHint}>send a message to start</div>
-            <div className={styles.emptyMeta}>cwd: {thread.cwd}</div>
+      <div className={styles.body}>
+        <div className={styles.chatCol}>
+          <div className={styles.scroll} ref={scrollRef} onScroll={handleScroll}>
+            {renderItems.length === 0 && !isStreaming ? (
+              <div className={styles.empty}>
+                <MessageSquare size={28} className={styles.emptyIcon} strokeWidth={1.4} />
+                <div className={styles.emptyTitle}>empty conversation</div>
+                <div className={styles.emptyHint}>send a message to start</div>
+                <div className={styles.emptyMeta}>cwd: {thread.cwd}</div>
+              </div>
+            ) : (
+              <div className={styles.inner}>
+                {renderItems.map((it, idx) => {
+                  const isLast = idx === renderItems.length - 1;
+                  return (
+                    <ItemRow
+                      key={it.key}
+                      item={it}
+                      isLast={isLast}
+                      openToolMsgId={openToolMsgId}
+                      onToggleTools={toggleTools}
+                    />
+                  );
+                })}
+                <div className={styles.scrollPad} />
+              </div>
+            )}
           </div>
-        ) : (
-        <div className={styles.inner}>
-          {renderItems.map((it, idx) => {
-            const isLast = idx === renderItems.length - 1;
-            return <ItemRow key={it.key} item={it} isLast={isLast} />;
-          })}
-          <div className={styles.scrollPad} />
-        </div>
-        )}
-      </div>
 
-      <div className={styles.composer}>
-        <div className={styles.composerRow}>
-          <span className={styles.composerPrompt}>{projectName} ❯</span>
-          <textarea
-            ref={composerRef}
-            className={styles.composerInput}
-            rows={1}
-            value={input}
-            onChange={onInputChange}
-            onKeyDown={onComposerKey}
-            placeholder={isStreaming ? 'claude is responding…' : 'send a message — enter to send, shift+enter for newline'}
-            disabled={isStreaming}
-          />
-          {isStreaming ? (
-            <button className={styles.composerSend} onClick={stop}>
-              <Square size={12} />
-              <span>stop</span>
-            </button>
-          ) : (
-            <button className={styles.composerSend} onClick={() => void send()} disabled={!input.trim()}>
-              <Send size={12} />
-              <span>send</span>
-            </button>
-          )}
+          <div className={styles.composer}>
+            <div className={styles.composerRow}>
+              <span className={styles.composerPrompt}>{projectName} ❯</span>
+              <textarea
+                ref={composerRef}
+                className={styles.composerInput}
+                rows={1}
+                value={input}
+                onChange={onInputChange}
+                onKeyDown={onComposerKey}
+                placeholder={isStreaming ? 'claude is responding…' : 'send a message — enter to send, shift+enter for newline'}
+                disabled={isStreaming}
+              />
+              {isStreaming ? (
+                <button className={styles.composerSend} onClick={stop}>
+                  <Square size={12} />
+                  <span>stop</span>
+                </button>
+              ) : (
+                <button className={styles.composerSend} onClick={() => void send()} disabled={!input.trim()}>
+                  <Send size={12} />
+                  <span>send</span>
+                </button>
+              )}
+            </div>
+            <div className={styles.bottomInfo}>
+              {sessionInfo?.sessionId && (
+                <InfoChip k="session" v={sessionInfo.sessionId.slice(0, 8) + '…'} />
+              )}
+              {sessionInfo?.model && <InfoChip k="model" v={sessionInfo.model} />}
+              {typeof sessionInfo?.toolsCount === 'number' && (
+                <InfoChip k="tools" v={String(sessionInfo.toolsCount)} />
+              )}
+              {sessionInfo?.permissionMode && (
+                <InfoChip k="perm" v={sessionInfo.permissionMode} />
+              )}
+              <InfoChip k="cwd" v={thread.cwd} />
+            </div>
+          </div>
         </div>
-        <div className={styles.composerHint}>cwd: {thread.cwd}</div>
+
+        {drawerBubble && (
+          <ToolDrawer bubble={drawerBubble} onClose={() => setOpenToolMsgId(null)} />
+        )}
       </div>
     </div>
   );
 }
 
-function ItemRow({ item, isLast }: { item: RenderItem; isLast: boolean }) {
-  const dotRole = item.kind === 'error' ? 'error' : item.kind === 'sys' ? 'sys' : undefined;
+function InfoChip({ k, v }: { k: string; v: string }) {
+  return (
+    <span className={styles.infoChip}>
+      <span className={styles.infoChipKey}>{k}</span>
+      <span className={styles.infoChipValue}>{v}</span>
+    </span>
+  );
+}
+
+interface ItemRowProps {
+  item: RenderItem;
+  isLast: boolean;
+  openToolMsgId: string | null;
+  onToggleTools: (msgId: string) => void;
+}
+
+function ItemRow({ item, isLast, openToolMsgId, onToggleTools }: ItemRowProps) {
+  const dotRole = item.kind === 'error' ? 'error' : undefined;
   const gutter = (
     <div className={styles.bubbleGutter}>
       <span className={styles.timelineDot} data-role={dotRole} />
       {!isLast && <span className={styles.timelineLine} />}
     </div>
   );
-
-  if (item.kind === 'sys') {
-    return (
-      <div className={styles.bubbleRow}>
-        {gutter}
-        <div className={styles.sysWrap}>
-          {item.notes.map((n, i) => (
-            <SystemNote key={i} event={n} />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   if (item.kind === 'user') {
     return (
@@ -315,6 +389,7 @@ function ItemRow({ item, isLast }: { item: RenderItem; isLast: boolean }) {
             <MarkdownContent text={item.content} />
           </div>
         </div>
+        <div className={styles.bubbleAux} />
       </div>
     );
   }
@@ -324,6 +399,7 @@ function ItemRow({ item, isLast }: { item: RenderItem; isLast: boolean }) {
     const hasText = !!bubble.text.trim();
     const hasTools = bubble.toolCalls.length > 0;
     const hasThinking = bubble.thinking.length > 0;
+    const isToolDrawerOpen = openToolMsgId === bubble.msgId;
 
     return (
       <div className={styles.bubbleRow}>
@@ -352,14 +428,20 @@ function ItemRow({ item, isLast }: { item: RenderItem; isLast: boolean }) {
             ) : !hasTools ? (
               <div className={styles.workingNote}>working…</div>
             ) : null}
-            {hasTools && (
-              <div className={styles.toolList}>
-                {bubble.toolCalls.map((c) => (
-                  <ToolCall key={c.id} call={c} />
-                ))}
-              </div>
-            )}
           </div>
+        </div>
+        <div className={styles.bubbleAux}>
+          {hasTools && (
+            <button
+              type="button"
+              className={`${styles.toolsButton} ${isToolDrawerOpen ? styles.toolsButtonActive : ''}`}
+              onClick={() => onToggleTools(bubble.msgId)}
+              title="show tool calls"
+            >
+              <Wrench size={11} className={styles.toolsButtonGlyph} />
+              <span>{bubble.toolCalls.length} {bubble.toolCalls.length === 1 ? 'tool' : 'tools'}</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -380,6 +462,7 @@ function ItemRow({ item, isLast }: { item: RenderItem; isLast: boolean }) {
             <span className={styles.streamingCaret}>▍</span>
           </div>
         </div>
+        <div className={styles.bubbleAux} />
       </div>
     );
   }
@@ -395,6 +478,7 @@ function ItemRow({ item, isLast }: { item: RenderItem; isLast: boolean }) {
         <div className={styles.bubbleLabel} data-role="error">ERROR</div>
         <div className={styles.bubbleBody}>{item.message}</div>
       </div>
+      <div className={styles.bubbleAux} />
     </div>
   );
 }
