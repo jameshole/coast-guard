@@ -4,7 +4,6 @@ import { loadThread, resetThread, streamMessage } from './api';
 import { buildTurnBubbles } from './buildBubbles';
 import type { AssistantBubble, SystemNoteEvent } from './buildBubbles';
 import { MarkdownContent } from './MarkdownContent';
-import { ThinkingBlock } from './ThinkingBlock';
 import { ToolDrawer } from './ToolDrawer';
 import type { ClaudeEvent, Thread } from './types';
 import styles from './ClaudeView.module.css';
@@ -398,7 +397,6 @@ function ItemRow({ item, isLast, openToolMsgId, onToggleTools }: ItemRowProps) {
     const { bubble, isStreaming } = item;
     const hasText = !!bubble.text.trim();
     const hasTools = bubble.toolCalls.length > 0;
-    const hasThinking = bubble.thinking.length > 0;
     const isToolDrawerOpen = openToolMsgId === bubble.msgId;
 
     return (
@@ -414,13 +412,6 @@ function ItemRow({ item, isLast, openToolMsgId, onToggleTools }: ItemRowProps) {
             )}
           </div>
           <div className={styles.bubbleBody}>
-            {hasThinking && (
-              <div className={styles.toolList}>
-                {bubble.thinking.map((t, i) => (
-                  <ThinkingBlock key={`th-${i}`} text={t} />
-                ))}
-              </div>
-            )}
             {hasText ? (
               <MarkdownContent text={bubble.text} />
             ) : !hasTools && isStreaming ? (

@@ -12,7 +12,6 @@ export interface AssistantBubble {
   msgId: string;
   text: string;
   toolCalls: ToolCall[];
-  thinking: string[];
 }
 
 export interface SystemNoteEvent {
@@ -38,6 +37,9 @@ interface RawBubble extends AssistantBubble {
   seenTools: Set<string>;
   seenTextHashes: Set<string>;
 }
+
+// Thinking blocks are intentionally dropped — Claude emits encrypted thinking
+// (empty `thinking` text + signature) so there's nothing useful to render.
 
 interface ToolResultRecord {
   content: unknown;
@@ -129,8 +131,6 @@ export function buildTurnBubbles(events: ClaudeEvent[]): BuiltTurn {
             }
           }
         }
-      } else if (c.type === 'thinking' && typeof c.thinking === 'string') {
-        bubble.thinking.push(c.thinking);
       }
     }
   }
@@ -162,7 +162,6 @@ function ensureBubble(map: Map<string, RawBubble>, order: string[], msgId: strin
       msgId,
       text: '',
       toolCalls: [],
-      thinking: [],
       seenTools: new Set(),
       seenTextHashes: new Set(),
     };
@@ -180,29 +179,24 @@ function ensureBubble(map: Map<string, RawBubble>, order: string[], msgId: strin
 function compactBubbles(bubbles: RawBubble[]): AssistantBubble[] {
   const out: AssistantBubble[] = [];
   let pendingTools: ToolCall[] = [];
-  let pendingThinking: string[] = [];
   for (const b of bubbles) {
     const hasText = !!(b.text && b.text.trim());
     if (!hasText) {
       pendingTools.push(...b.toolCalls);
-      pendingThinking.push(...b.thinking);
       continue;
     }
     out.push({
       msgId: b.msgId,
       text: b.text,
       toolCalls: [...pendingTools, ...b.toolCalls],
-      thinking: [...pendingThinking, ...b.thinking],
     });
     pendingTools = [];
-    pendingThinking = [];
   }
-  if (pendingTools.length > 0 || pendingThinking.length > 0) {
+  if (pendingTools.length > 0) {
     out.push({
       msgId: 'tools-pending',
       text: '',
       toolCalls: pendingTools,
-      thinking: pendingThinking,
     });
   }
   return out;
