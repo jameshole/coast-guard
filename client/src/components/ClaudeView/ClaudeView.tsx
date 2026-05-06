@@ -2,18 +2,20 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Send, Square, RotateCcw, MessageSquare } from 'lucide-react';
 import { loadThread, resetThread, streamMessage } from './api';
 import { buildTurnBubbles } from './buildBubbles';
+import type { AssistantBubble, SystemNoteEvent } from './buildBubbles';
+import { MarkdownContent } from './MarkdownContent';
+import { ToolCall } from './ToolCall';
+import { ThinkingBlock } from './ThinkingBlock';
+import { SystemNote } from './SystemNote';
 import type { ClaudeEvent, Thread } from './types';
 import styles from './ClaudeView.module.css';
 
-interface RenderItem {
-  kind: 'user' | 'assistant' | 'pending' | 'error';
-  key: string;
-  content?: string;
-  text?: string;
-  toolNames?: string[];
-  isStreaming?: boolean;
-  message?: string;
-}
+type RenderItem =
+  | { kind: 'user'; key: string; content: string }
+  | { kind: 'assistant'; key: string; bubble: AssistantBubble; isStreaming: boolean }
+  | { kind: 'sys'; key: string; notes: SystemNoteEvent[] }
+  | { kind: 'pending'; key: string }
+  | { kind: 'error'; key: string; message: string };
 
 interface StreamingUser {
   id: string;
@@ -50,13 +52,16 @@ export function ClaudeView() {
       if (node.role === 'user') {
         items.push({ kind: 'user', key: `u-${node.id}`, content: node.content });
       } else {
-        const t = buildTurnBubbles(node.events);
+        const t = buildTurnBubbles(node.events as ClaudeEvent[]);
+        if (t.systemNotes.length > 0) {
+          items.push({ kind: 'sys', key: `sys-${node.id}`, notes: t.systemNotes });
+        }
         for (const b of t.bubbles) {
           items.push({
             kind: 'assistant',
             key: `${node.id}-${b.msgId}`,
-            text: b.text,
-            toolNames: b.toolNames,
+            bubble: b,
+            isStreaming: false,
           });
         }
         if (t.bubbles.length === 0 && t.resultEvent?.is_error) {
@@ -73,12 +78,14 @@ export function ClaudeView() {
     }
     if (streamingEvents !== null) {
       const t = buildTurnBubbles(streamingEvents);
+      if (t.systemNotes.length > 0) {
+        items.push({ kind: 'sys', key: 'stream-sys', notes: t.systemNotes });
+      }
       for (const b of t.bubbles) {
         items.push({
           kind: 'assistant',
           key: `stream-${b.msgId}`,
-          text: b.text,
-          toolNames: b.toolNames,
+          bubble: b,
           isStreaming: true,
         });
       }
@@ -238,69 +245,7 @@ export function ClaudeView() {
         <div className={styles.inner}>
           {renderItems.map((it, idx) => {
             const isLast = idx === renderItems.length - 1;
-            const dotRole = it.kind === 'error' ? 'error' : undefined;
-            const gutter = (
-              <div className={styles.bubbleGutter}>
-                <span className={styles.timelineDot} data-role={dotRole} />
-                {!isLast && <span className={styles.timelineLine} />}
-              </div>
-            );
-            if (it.kind === 'user') {
-              return (
-                <div key={it.key} className={styles.bubbleRow}>
-                  {gutter}
-                  <div className={styles.bubble}>
-                    <div className={styles.bubbleLabel} data-role="user">USER</div>
-                    <div className={styles.bubbleBody}>{it.content}</div>
-                  </div>
-                </div>
-              );
-            }
-            if (it.kind === 'assistant') {
-              return (
-                <div key={it.key} className={styles.bubbleRow}>
-                  {gutter}
-                  <div className={styles.bubble}>
-                    <div className={styles.bubbleLabel} data-role="assistant">ASSISTANT</div>
-                    {it.text && <div className={styles.bubbleBody}>{it.text}</div>}
-                    {it.toolNames && it.toolNames.length > 0 && (
-                      <div className={styles.toolPills}>
-                        {it.toolNames.map((n, i) => (
-                          <span key={`${n}-${i}`} className={styles.toolPill}>{`[tool: ${n}]`}</span>
-                        ))}
-                      </div>
-                    )}
-                    {!it.text && (!it.toolNames || it.toolNames.length === 0) && it.isStreaming && (
-                      <div className={styles.bubbleBody}>
-                        <span className={styles.streamingCaret}>▍</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-            if (it.kind === 'pending') {
-              return (
-                <div key={it.key} className={styles.bubbleRow}>
-                  {gutter}
-                  <div className={styles.bubble}>
-                    <div className={styles.bubbleLabel} data-role="assistant">ASSISTANT</div>
-                    <div className={styles.bubbleBody}>
-                      <span className={styles.streamingCaret}>▍</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <div key={it.key} className={styles.bubbleRow}>
-                {gutter}
-                <div className={`${styles.bubble} ${styles.bubbleError}`}>
-                  <div className={styles.bubbleLabel} data-role="error">ERROR</div>
-                  <div className={styles.bubbleBody}>{it.message}</div>
-                </div>
-              </div>
-            );
+            return <ItemRow key={it.key} item={it} isLast={isLast} />;
           })}
           <div className={styles.scrollPad} />
         </div>
@@ -333,6 +278,122 @@ export function ClaudeView() {
           )}
         </div>
         <div className={styles.composerHint}>cwd: {thread.cwd}</div>
+      </div>
+    </div>
+  );
+}
+
+function ItemRow({ item, isLast }: { item: RenderItem; isLast: boolean }) {
+  const dotRole = item.kind === 'error' ? 'error' : item.kind === 'sys' ? 'sys' : undefined;
+  const gutter = (
+    <div className={styles.bubbleGutter}>
+      <span className={styles.timelineDot} data-role={dotRole} />
+      {!isLast && <span className={styles.timelineLine} />}
+    </div>
+  );
+
+  if (item.kind === 'sys') {
+    return (
+      <div className={styles.bubbleRow}>
+        {gutter}
+        <div className={styles.sysWrap}>
+          {item.notes.map((n, i) => (
+            <SystemNote key={i} event={n} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === 'user') {
+    return (
+      <div className={styles.bubbleRow}>
+        {gutter}
+        <div className={styles.bubble}>
+          <div className={styles.bubbleLabel} data-role="user">USER</div>
+          <div className={styles.bubbleBody}>
+            <MarkdownContent text={item.content} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === 'assistant') {
+    const { bubble, isStreaming } = item;
+    const hasText = !!bubble.text.trim();
+    const hasTools = bubble.toolCalls.length > 0;
+    const hasThinking = bubble.thinking.length > 0;
+
+    return (
+      <div className={styles.bubbleRow}>
+        {gutter}
+        <div className={styles.bubble}>
+          <div className={styles.bubbleLabel} data-role="assistant">
+            ASSISTANT
+            {isStreaming && (
+              <span className={styles.typingDots}>
+                <span /><span /><span />
+              </span>
+            )}
+          </div>
+          <div className={styles.bubbleBody}>
+            {hasThinking && (
+              <div className={styles.toolList}>
+                {bubble.thinking.map((t, i) => (
+                  <ThinkingBlock key={`th-${i}`} text={t} />
+                ))}
+              </div>
+            )}
+            {hasText ? (
+              <MarkdownContent text={bubble.text} />
+            ) : !hasTools && isStreaming ? (
+              <span className={styles.streamingCaret}>▍</span>
+            ) : !hasTools ? (
+              <div className={styles.workingNote}>working…</div>
+            ) : null}
+            {hasTools && (
+              <div className={styles.toolList}>
+                {bubble.toolCalls.map((c) => (
+                  <ToolCall key={c.id} call={c} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === 'pending') {
+    return (
+      <div className={styles.bubbleRow}>
+        {gutter}
+        <div className={styles.bubble}>
+          <div className={styles.bubbleLabel} data-role="assistant">
+            ASSISTANT
+            <span className={styles.typingDots}>
+              <span /><span /><span />
+            </span>
+          </div>
+          <div className={styles.bubbleBody}>
+            <span className={styles.streamingCaret}>▍</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // error
+  return (
+    <div className={styles.bubbleRow}>
+      <div className={styles.bubbleGutter}>
+        <span className={styles.timelineDot} data-role="error" />
+        {!isLast && <span className={styles.timelineLine} />}
+      </div>
+      <div className={`${styles.bubble} ${styles.bubbleError}`}>
+        <div className={styles.bubbleLabel} data-role="error">ERROR</div>
+        <div className={styles.bubbleBody}>{item.message}</div>
       </div>
     </div>
   );

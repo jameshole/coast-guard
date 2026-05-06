@@ -341,3 +341,333 @@
   font-size: 12px;
   font-family: var(--font-mono);
 }
+
+/* ================ Markdown ================ */
+
+.md {
+  white-space: normal;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.md h1 { font-size: 16px; }
+.md h2 { font-size: 14px; }
+.md h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.md h4, .md h5, .md h6 { font-size: 12px; }
+
+.md ul, .md ol {
+  margin: 4px 0 8px;
+  padding-left: 22px;
+}
+
+.md li {
+  margin: 2px 0;
+  line-height: 1.55;
+}
+
+.md li > ul, .md li > ol {
+  margin: 2px 0;
+}
+
+.md strong { color: var(--text-primary); font-weight: 700; }
+.md em { color: var(--text-primary); font-style: italic; }
+
+.md code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #fbbf24;
+}
+
+.md pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.md pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.md a {
+  color: var(--text-accent);
+  text-decoration: none;
+}
+
+.md a:hover {
+  text-decoration: underline;
+}
+
+.md blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.md table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.md th, .md td {
+  border: 1px solid var(--border-color);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.md th {
+  background: var(--bg-tertiary);
+}
+
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--border-color);
+  margin: 12px 0;
+}
+
+/* ================ Tool calls + thinking ================ */
+
+.toolList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.bubbleBody > .toolList:first-child {
+  margin-top: 0;
+}
+
+.toolCall {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.toolCallHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: left;
+}
+
+.toolCallHeader:hover {
+  background: var(--bg-hover);
+}
+
+.toolCallChev {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.toolCall[data-open='true'] .toolCallChev {
+  transform: rotate(90deg);
+}
+
+.toolCallName {
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.toolCallSummary {
+  color: var(--text-secondary);
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolCallStatus {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.toolCallStatus[data-status='done'] {
+  color: var(--text-accent);
+  border-color: rgba(94, 234, 212, 0.3);
+}
+
+.toolCallStatus[data-status='error'] {
+  color: #fb7185;
+  border-color: rgba(251, 113, 133, 0.4);
+}
+
+.toolCallStatus[data-status='running'] {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.toolCallBody {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.toolCallSection + .toolCallSection {
+  margin-top: 10px;
+}
+
+.toolCallSectionLabel {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.toolCallPre {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.toolCallPreError {
+  border-color: rgba(251, 113, 133, 0.4);
+  color: #fb7185;
+}
+
+/* ================ System note ================ */
+
+.sysWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.sysNote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.sysNoteField {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.sysNoteKey {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.sysNoteValue {
+  color: var(--text-primary);
+}
+
+.timelineDot[data-role='sys'] {
+  background: var(--text-muted);
+}
+
+/* ================ Typing dots + working note ================ */
+
+.typingDots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.typingDots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-accent);
+  opacity: 0.4;
+  animation: typingDot 1.2s ease-in-out infinite;
+}
+
+.typingDots span:nth-child(2) { animation-delay: 0.15s; }
+.typingDots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes typingDot {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+.workingNote {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
