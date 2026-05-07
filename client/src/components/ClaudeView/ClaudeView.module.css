@@ -470,11 +470,13 @@
 
 .toolDrawerList {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+}
+
+.toolDrawerList > * + * {
+  margin-top: 6px;
 }
 
 .toolDrawerEmpty {
