@@ -1,22 +1,24 @@
 import { useState, useCallback, useRef, useEffect, ReactNode } from 'react';
-import { FolderTree, GitBranch, MessageSquare, PanelLeftClose } from 'lucide-react';
+import { FolderTree, GitBranch, MessageSquare, PanelLeftClose, Play } from 'lucide-react';
 import { FileTree } from '../FileTree';
 import { GitChangedFiles } from '../GitChangedFiles';
+import { useScripts } from '../ScriptsPanel';
 import { useChangedFiles } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
 import styles from './Sidebar.module.css';
 
-type TabType = 'explorer' | 'source-control' | 'comments';
+type TabType = 'explorer' | 'source-control' | 'comments' | 'scripts';
 
 interface SidebarProps {
   onFileSelect: (path: string) => void;
   selectedFile: string | null;
   commentCount: number;
   commentPanel: ReactNode;
+  scriptsPanel: ReactNode;
   pendingSelection: { startLine: number; endLine: number } | null;
 }
 
-export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel, pendingSelection }: SidebarProps) {
+export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel, scriptsPanel, pendingSelection }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>('explorer');
   const [collapsed, setCollapsed] = useState(false);
   const [contentWidth, setContentWidth] = useState(260);
@@ -26,6 +28,8 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
   const { baseRef } = useDiffBase();
   const { data: changedFiles } = useChangedFiles(baseRef);
   const changedCount = changedFiles ? Object.keys(changedFiles).length : 0;
+  const { latestRun } = useScripts();
+  const runningScripts = Object.values(latestRun).filter((r) => r && r.status === 'running').length;
 
   useEffect(() => {
     if (pendingSelection) {
@@ -52,7 +56,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
   }, []);
 
   useEffect(() => {
-    const tabs: Record<string, TabType> = { '1': 'explorer', '2': 'source-control', '3': 'comments' };
+    const tabs: Record<string, TabType> = { '1': 'explorer', '2': 'source-control', '3': 'comments', '4': 'scripts' };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Control') setCtrlHeld(true);
       if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
@@ -130,6 +134,14 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
           <MessageSquare size={18} />
           {ctrlHeld ? <span className={styles.shortcutHint}>3</span> : commentCount > 0 && <span className={styles.commentBadge}>{commentCount}</span>}
         </button>
+        <button
+          className={`${styles.tab} ${activeTab === 'scripts' && !collapsed ? styles.active : ''}`}
+          onClick={() => handleTabClick('scripts')}
+          title="Scripts"
+        >
+          <Play size={18} />
+          {ctrlHeld ? <span className={styles.shortcutHint}>4</span> : runningScripts > 0 && <span className={styles.runningBadge} />}
+        </button>
         <div className={styles.tabSpacer} />
         <button
           className={styles.tab}
@@ -152,6 +164,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
             <GitChangedFiles onFileSelect={onFileSelect} selectedFile={selectedFile} />
           )}
           {!collapsed && activeTab === 'comments' && commentPanel}
+          {!collapsed && activeTab === 'scripts' && scriptsPanel}
         </div>
         <div className={styles.resizeHandle} onMouseDown={handleMouseDown} />
       </div>

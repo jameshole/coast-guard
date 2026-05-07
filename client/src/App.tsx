@@ -9,6 +9,7 @@ import { DefinitionPicker } from './components/DefinitionPicker';
 import { CommentPanel } from './components/CommentPanel';
 import type { Comment } from './components/CommentPanel';
 import { ClaudeView, ClaudeProvider } from './components/ClaudeView';
+import { ScriptsProvider, ScriptsPanel } from './components/ScriptsPanel';
 import type { DefinitionResult } from './types';
 import { api } from './services/api';
 import { useFileWatcher } from './hooks/useFileWatcher';
@@ -274,6 +275,7 @@ function AppContent() {
   }
 
   return (
+    <ScriptsProvider>
     <ClaudeProvider isActive={mainView === 'claude'}>
       <Layout
         sidebar={
@@ -294,6 +296,7 @@ function AppContent() {
                 onCancelSelection={handleCancelSelection}
               />
             }
+            scriptsPanel={<ScriptsPanel />}
           />
         }
         main={renderMainContent()}
@@ -320,6 +323,7 @@ function AppContent() {
       {isDefinitionLoading && <LoadingBar />}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </ClaudeProvider>
+    </ScriptsProvider>
   );
 }
 

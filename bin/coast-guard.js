@@ -46,7 +46,7 @@ program
     }
 
     // Start server (auto-finds available port)
-    const { server, port: actualPort, wss, watchService } = await startServer({
+    const { server, port: actualPort, wss, watchService, scriptRunner } = await startServer({
       projectPath: absolutePath,
       port,
     });
@@ -72,6 +72,7 @@ program
       console.log('\nShutting down...');
 
       watchService.stop();
+      scriptRunner.shutdown();
 
       // Notify clients of shutdown so they can close their tabs
       const shutdownMessage = JSON.stringify({ type: 'shutdown' });

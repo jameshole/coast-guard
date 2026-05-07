@@ -11,17 +11,25 @@ import { WatchService, FileChangeEvent } from './services/watchService.js';
 import { createFilesRouter } from './routes/files.js';
 import { createGitRouter } from './routes/git.js';
 import { createClaudeRouter } from './routes/claude.js';
+import { createScriptsRouter } from './routes/scripts.js';
+import { ScriptRunner, RunState, ScriptOutputEvent } from './services/scriptRunner.js';
 import type { ServerConfig } from './types/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export function createServer(config: ServerConfig): Express {
+interface CreateServerResult {
+  app: Express;
+  scriptRunner: ScriptRunner;
+}
+
+export function createServer(config: ServerConfig): CreateServerResult {
   const app = express();
 
   // Initialize services
   const fileService = new FileService(config.projectPath);
   const gitService = new GitService(config.projectPath);
   const tsService = new TypeScriptService(config.projectPath);
+  const scriptRunner = new ScriptRunner(config.projectPath);
 
   // Middleware
   app.use(cors());
@@ -31,6 +39,7 @@ export function createServer(config: ServerConfig): Express {
   app.use('/api/files', createFilesRouter(fileService, tsService));
   app.use('/api/git', createGitRouter(gitService));
   app.use('/api/claude', createClaudeRouter(config.projectPath));
+  app.use('/api/scripts', createScriptsRouter(scriptRunner));
 
   // Project info endpoint
   app.get('/api/project', (_req, res) => {
@@ -58,7 +67,7 @@ export function createServer(config: ServerConfig): Express {
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 
-  return app;
+  return { app, scriptRunner };
 }
 
 interface StartServerResult {
@@ -66,10 +75,11 @@ interface StartServerResult {
   port: number;
   wss: WebSocketServer;
   watchService: WatchService;
+  scriptRunner: ScriptRunner;
 }
 
 export async function startServer(config: ServerConfig): Promise<StartServerResult> {
-  const app = createServer(config);
+  const { app, scriptRunner } = createServer(config);
   const httpServer = createHttpServer(app);
 
   // Find an available port first
@@ -114,6 +124,22 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
     });
   });
 
+  // Broadcast script-run events to all connected clients
+  const broadcast = (payload: unknown) => {
+    const msg = JSON.stringify(payload);
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(msg);
+      }
+    });
+  };
+  scriptRunner.on('update', (state: RunState) => {
+    broadcast({ type: 'scriptUpdate', state });
+  });
+  scriptRunner.on('output', (event: ScriptOutputEvent) => {
+    broadcast({ type: 'scriptOutput', runId: event.runId, line: event.line });
+  });
+
   // WebSocket connection handling
   wss.on('connection', (ws) => {
     // Send initial connection confirmation
@@ -136,7 +162,7 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
     });
   });
 
-  return { server: httpServer, port: boundPort, wss, watchService };
+  return { server: httpServer, port: boundPort, wss, watchService, scriptRunner };
 }
 
 function tryListen(httpServer: HttpServer, port: number): Promise<number> {
@@ -160,13 +186,16 @@ if (isMain) {
   const projectPath = process.argv[2] || process.cwd();
   const port = parseInt(process.argv[3] || '3847', 10);
 
-  startServer({ projectPath, port }).then(({ server, wss, watchService }) => {
+  startServer({ projectPath, port }).then(({ server, wss, watchService, scriptRunner }) => {
     // Graceful shutdown handler
     const shutdown = () => {
       console.log('\nShutting down...');
 
       // Stop the file watcher (clears intervals and file watchers)
       watchService.stop();
+
+      // Kill any running script children
+      scriptRunner.shutdown();
 
       // Close all WebSocket connections
       wss.clients.forEach((client) => {
