@@ -8,7 +8,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { DefinitionPicker } from './components/DefinitionPicker';
 import { CommentPanel } from './components/CommentPanel';
 import type { Comment } from './components/CommentPanel';
-import { ClaudeView } from './components/ClaudeView';
+import { ClaudeView, ClaudeProvider } from './components/ClaudeView';
 import type { DefinitionResult } from './types';
 import { api } from './services/api';
 import { useFileWatcher } from './hooks/useFileWatcher';
@@ -274,7 +274,7 @@ function AppContent() {
   }
 
   return (
-    <>
+    <ClaudeProvider isActive={mainView === 'claude'}>
       <Layout
         sidebar={
           <Sidebar
@@ -319,7 +319,7 @@ function AppContent() {
       />
       {isDefinitionLoading && <LoadingBar />}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
-    </>
+    </ClaudeProvider>
   );
 }
 

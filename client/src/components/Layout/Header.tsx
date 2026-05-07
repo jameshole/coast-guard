@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Code, FileText, MessageSquare } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
+import { useClaude } from '../ClaudeView';
 import styles from './Header.module.css';
 
 function isMarkdownFile(path: string): boolean {
@@ -23,6 +24,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, mark
   const { data: projectInfo } = useProjectInfo();
   const { data: gitCheck } = useGitCheck();
   const { data: gitBranch } = useGitBranch();
+  const { unread: claudeUnread, isStreaming: claudeStreaming } = useClaude();
   const [diffCount, setDiffCount] = useState(0);
   const [currentDiffIndex, setCurrentDiffIndex] = useState(-1);
   const lastFileRef = useRef<string | null>(null);
@@ -179,6 +181,12 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, mark
         >
           <MessageSquare size={14} />
           <span>Claude</span>
+          {claudeStreaming && mainView !== 'claude' && (
+            <span className={styles.viewToggleStreamDot} title="Claude is responding…" />
+          )}
+          {claudeUnread && mainView !== 'claude' && !claudeStreaming && (
+            <span className={styles.viewToggleBadgeDot} title="New response" />
+          )}
         </button>
       </div>
 

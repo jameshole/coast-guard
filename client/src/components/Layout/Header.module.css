@@ -123,6 +123,31 @@
   color: var(--text-primary);
 }
 
+.viewToggleBadgeDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-accent);
+  margin-left: 2px;
+  box-shadow: 0 0 6px rgba(94, 234, 212, 0.6);
+}
+
+.viewToggleStreamDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-accent);
+  margin-left: 2px;
+  animation: claudeStreamPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes claudeStreamPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 .diffNav {
   display: flex;
   align-items: center;

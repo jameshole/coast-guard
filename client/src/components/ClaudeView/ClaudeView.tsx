@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Send, Square, RotateCcw, MessageSquare, Wrench } from 'lucide-react';
-import { loadThread, resetThread, streamMessage } from './api';
+import { useClaude } from './ClaudeContext';
 import { buildTurnBubbles } from './buildBubbles';
 import type { AssistantBubble, SystemNoteEvent } from './buildBubbles';
 import { MarkdownContent } from './MarkdownContent';
 import { ToolDrawer } from './ToolDrawer';
-import type { ClaudeEvent, Thread } from './types';
+import type { ClaudeEvent } from './types';
 import styles from './ClaudeView.module.css';
 
 type RenderItem =
@@ -13,11 +13,6 @@ type RenderItem =
   | { kind: 'assistant'; key: string; bubble: AssistantBubble; isStreaming: boolean }
   | { kind: 'pending'; key: string }
   | { kind: 'error'; key: string; message: string };
-
-interface StreamingUser {
-  id: string;
-  content: string;
-}
 
 interface SessionInfo {
   sessionId?: string;
@@ -27,28 +22,25 @@ interface SessionInfo {
 }
 
 export function ClaudeView() {
-  const [thread, setThread] = useState<Thread | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [chatError, setChatError] = useState<string | null>(null);
-  const [input, setInput] = useState('');
-  const [streamingEvents, setStreamingEvents] = useState<ClaudeEvent[] | null>(null);
-  const [streamingUser, setStreamingUser] = useState<StreamingUser | null>(null);
-  const [openToolMsgId, setOpenToolMsgId] = useState<string | null>(null);
+  const {
+    thread,
+    loadError,
+    chatError,
+    streamingEvents,
+    streamingUser,
+    isStreaming,
+    openToolMsgId,
+    send,
+    stop,
+    reset,
+    toggleTools,
+    closeTools,
+  } = useClaude();
 
+  const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const stopRef = useRef<AbortController | null>(null);
   const stickToBottomRef = useRef(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadThread()
-      .then((t) => { if (!cancelled) setThread(t); })
-      .catch((err) => { if (!cancelled) setLoadError(err.message); });
-    return () => { cancelled = true; };
-  }, []);
-
-  const isStreaming = streamingEvents !== null;
 
   // Walk the thread once: build render items (no sys notes inline) and accumulate
   // the latest init system note so we can show the session/model/tools chip in
@@ -132,10 +124,6 @@ export function ClaudeView() {
     return null;
   }, [openToolMsgId, renderItems]);
 
-  useEffect(() => {
-    if (openToolMsgId && !drawerBubble) setOpenToolMsgId(null);
-  }, [drawerBubble, openToolMsgId]);
-
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -152,75 +140,14 @@ export function ClaudeView() {
     if (stickToBottomRef.current) scrollToBottom();
   }, [renderItems.length, streamingEvents, scrollToBottom]);
 
-  const send = useCallback(async () => {
+  const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || !thread || isStreaming) return;
+    if (!text) return;
     setInput('');
-    setChatError(null);
-    stickToBottomRef.current = true;
     if (composerRef.current) composerRef.current.style.height = 'auto';
-
-    const userNode: StreamingUser = { id: `u${Date.now()}`, content: text };
-    setStreamingUser(userNode);
-    setStreamingEvents([]);
-
-    const ctrl = new AbortController();
-    stopRef.current = ctrl;
-
-    try {
-      await streamMessage(text, ({ channel, data }) => {
-        if (channel === 'claude') {
-          setStreamingEvents((prev) => (prev ? [...prev, data as ClaudeEvent] : [data as ClaudeEvent]));
-        } else if (channel === 'local') {
-          const localData = data as { type?: string; message?: string };
-          if (localData.type === 'turn_end') {
-            void (async () => {
-              try {
-                const fresh = await loadThread();
-                setThread(fresh);
-              } finally {
-                setStreamingEvents(null);
-                setStreamingUser(null);
-              }
-            })();
-          } else if (localData.type === 'error') {
-            setChatError(localData.message || 'error');
-          }
-        }
-      }, ctrl.signal);
-    } catch (e) {
-      const err = e as { name?: string; message?: string };
-      if (err.name !== 'AbortError') setChatError(err.message || 'request failed');
-      setStreamingEvents(null);
-      setStreamingUser(null);
-    } finally {
-      stopRef.current = null;
-    }
-  }, [input, thread, isStreaming]);
-
-  const stop = useCallback(() => {
-    if (stopRef.current) {
-      stopRef.current.abort();
-      stopRef.current = null;
-    }
-  }, []);
-
-  const handleNew = useCallback(async () => {
-    if (isStreaming) return;
-    if (thread && thread.nodes.length > 0) {
-      const ok = window.confirm('Start a new conversation? This clears the current thread.');
-      if (!ok) return;
-    }
-    try {
-      const fresh = await resetThread();
-      setThread(fresh);
-      setChatError(null);
-      setOpenToolMsgId(null);
-      stickToBottomRef.current = true;
-    } catch (err) {
-      setChatError((err as Error).message);
-    }
-  }, [isStreaming, thread]);
+    stickToBottomRef.current = true;
+    await send(text);
+  }, [input, send]);
 
   const onInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -232,13 +159,9 @@ export function ClaudeView() {
   const onComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void send();
+      void handleSend();
     }
   };
-
-  const toggleTools = useCallback((msgId: string) => {
-    setOpenToolMsgId((prev) => (prev === msgId ? null : msgId));
-  }, []);
 
   if (loadError) {
     return (
@@ -266,7 +189,7 @@ export function ClaudeView() {
         </div>
         <button
           className={styles.headerAction}
-          onClick={handleNew}
+          onClick={() => void reset()}
           disabled={isStreaming}
           title="New conversation"
         >
@@ -323,7 +246,7 @@ export function ClaudeView() {
                   <span>stop</span>
                 </button>
               ) : (
-                <button className={styles.composerSend} onClick={() => void send()} disabled={!input.trim()}>
+                <button className={styles.composerSend} onClick={() => void handleSend()} disabled={!input.trim()}>
                   <Send size={12} />
                   <span>send</span>
                 </button>
@@ -346,7 +269,7 @@ export function ClaudeView() {
         </div>
 
         {drawerBubble && (
-          <ToolDrawer bubble={drawerBubble} onClose={() => setOpenToolMsgId(null)} />
+          <ToolDrawer bubble={drawerBubble} onClose={closeTools} />
         )}
       </div>
     </div>
