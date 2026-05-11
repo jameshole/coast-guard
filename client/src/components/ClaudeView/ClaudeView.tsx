@@ -342,8 +342,7 @@ export function ClaudeView() {
                 onKeyUp={(e) => syncCursor(e.currentTarget)}
                 onClick={(e) => syncCursor(e.currentTarget)}
                 onSelect={(e) => syncCursor(e.currentTarget)}
-                placeholder={isStreaming ? 'claude is responding…' : 'send a message — enter to send, shift+enter for newline'}
-                disabled={isStreaming}
+                placeholder={isStreaming ? 'claude is responding — type now, send when done' : 'send a message — enter to send, shift+enter for newline'}
               />
               {isStreaming ? (
                 <button className={styles.composerSend} onClick={stop}>
