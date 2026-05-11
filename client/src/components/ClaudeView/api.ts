@@ -12,6 +12,14 @@ export async function resetThread(): Promise<Thread> {
   return r.json();
 }
 
+export async function loadSlashCommands(): Promise<string[]> {
+  const r = await fetch('/api/claude/slash-commands');
+  if (!r.ok) return [];
+  const data = (await r.json()) as { commands?: unknown };
+  if (!Array.isArray(data.commands)) return [];
+  return data.commands.filter((c): c is string => typeof c === 'string');
+}
+
 export interface StreamEvent {
   channel: 'local' | 'claude';
   data: Record<string, unknown>;

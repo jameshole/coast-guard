@@ -262,10 +262,103 @@
 }
 
 .composer {
+  position: relative;
   border-top: 1px solid var(--border-color);
   background: var(--bg-secondary);
   padding: 8px 16px 6px;
   flex-shrink: 0;
+}
+
+/* ================ Slash-command popover ================ */
+
+.slashPopover {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(100% - 1px);
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  z-index: 5;
+  font-family: var(--font-mono);
+}
+
+.slashPopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.slashPopoverCount {
+  color: var(--text-secondary);
+}
+
+.slashPopoverList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.slashPopoverItem {
+  display: flex;
+  width: 100%;
+  padding: 4px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.slashPopoverItem:hover,
+.slashPopoverItemActive {
+  background: var(--bg-hover);
+}
+
+.slashPopoverItemActive .slashPopoverCmd {
+  color: var(--text-accent);
+}
+
+.slashPopoverCmd {
+  color: var(--text-primary);
+}
+
+.slashPopoverFooter {
+  display: flex;
+  gap: 12px;
+  padding: 4px 12px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.slashPopoverFooter kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 0 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  color: var(--text-secondary);
+  margin-right: 3px;
 }
 
 .composerRow {

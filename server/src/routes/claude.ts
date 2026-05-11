@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { spawn } from 'child_process';
 import { ThreadStore, AssistantNode, UserNode } from '../services/threadStore.js';
+import { SlashCommandsCache } from '../services/slashCommandsCache.js';
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
 
 export function createClaudeRouter(projectPath: string): Router {
   const router = Router();
   const store = new ThreadStore(projectPath);
+  const slashCache = new SlashCommandsCache(projectPath);
 
   router.get('/thread', (_req: Request, res: Response) => {
     res.json(store.get());
@@ -14,6 +16,13 @@ export function createClaudeRouter(projectPath: string): Router {
 
   router.post('/thread/reset', (_req: Request, res: Response) => {
     res.json(store.reset());
+  });
+
+  // Cached + warmed-up slash commands for this cwd. Used so the composer's
+  // autocomplete is populated before the first turn of a session.
+  router.get('/slash-commands', async (_req: Request, res: Response) => {
+    const entry = await slashCache.getOrWarmup();
+    res.json(entry);
   });
 
   router.post('/thread/message', (req: Request, res: Response) => {
@@ -90,9 +99,18 @@ export function createClaudeRouter(projectPath: string): Router {
         stdoutBuf = stdoutBuf.slice(nl + 1);
         if (!line.trim()) continue;
         try {
-          const obj = JSON.parse(line);
+          const obj = JSON.parse(line) as { type?: string; subtype?: string; slash_commands?: unknown };
           turnEvents.push(obj);
           send('claude', obj);
+          // Refresh the slash-commands cache whenever an init event lands so
+          // it stays current with the user's installed commands.
+          if (
+            obj.type === 'system' &&
+            obj.subtype === 'init' &&
+            Array.isArray(obj.slash_commands)
+          ) {
+            slashCache.set(obj.slash_commands as string[]);
+          }
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e);
           send('local', { type: 'parse_error', line, message });

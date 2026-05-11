@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { loadThread, resetThread, streamMessage } from './api';
+import { loadThread, resetThread, streamMessage, loadSlashCommands } from './api';
 import type { ClaudeEvent, Thread } from './types';
 
 interface StreamingUser {
@@ -16,6 +16,7 @@ interface ClaudeContextValue {
   isStreaming: boolean;
   openToolMsgId: string | null;
   unread: boolean;
+  cachedSlashCommands: string[];
   send: (text: string) => Promise<void>;
   stop: () => void;
   reset: () => Promise<void>;
@@ -39,6 +40,7 @@ export function ClaudeProvider({ children, isActive }: ClaudeProviderProps) {
   const [streamingUser, setStreamingUser] = useState<StreamingUser | null>(null);
   const [openToolMsgId, setOpenToolMsgId] = useState<string | null>(null);
   const [unread, setUnread] = useState(false);
+  const [cachedSlashCommands, setCachedSlashCommands] = useState<string[]>([]);
 
   const stopRef = useRef<AbortController | null>(null);
   const isActiveRef = useRef(isActive);
@@ -50,6 +52,16 @@ export function ClaudeProvider({ children, isActive }: ClaudeProviderProps) {
     loadThread()
       .then((t) => { if (!cancelled) setThread(t); })
       .catch((err: Error) => { if (!cancelled) setLoadError(err.message); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch the slash-command cache (server warms it up on demand if empty) so the
+  // composer's autocomplete has something to show before the first turn.
+  useEffect(() => {
+    let cancelled = false;
+    loadSlashCommands()
+      .then((cmds) => { if (!cancelled) setCachedSlashCommands(cmds); })
+      .catch(() => { /* tolerate failure — popover just stays empty */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -147,13 +159,14 @@ export function ClaudeProvider({ children, isActive }: ClaudeProviderProps) {
     isStreaming: streamingEvents !== null,
     openToolMsgId,
     unread,
+    cachedSlashCommands,
     send,
     stop,
     reset,
     toggleTools,
     closeTools,
     clearChatError,
-  }), [thread, loadError, chatError, streamingEvents, streamingUser, openToolMsgId, unread, send, stop, reset, toggleTools, closeTools, clearChatError]);
+  }), [thread, loadError, chatError, streamingEvents, streamingUser, openToolMsgId, unread, cachedSlashCommands, send, stop, reset, toggleTools, closeTools, clearChatError]);
 
   return <ClaudeContext.Provider value={value}>{children}</ClaudeContext.Provider>;
 }

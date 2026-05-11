@@ -1,10 +1,11 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Send, Square, RotateCcw, MessageSquare, Wrench } from 'lucide-react';
 import { useClaude } from './ClaudeContext';
 import { buildTurnBubbles } from './buildBubbles';
 import type { AssistantBubble, SystemNoteEvent } from './buildBubbles';
 import { MarkdownContent } from './MarkdownContent';
 import { ToolDrawer } from './ToolDrawer';
+import { SlashCommandPopover, filterCommands } from './SlashCommandPopover';
 import type { ClaudeEvent } from './types';
 import styles from './ClaudeView.module.css';
 
@@ -30,6 +31,7 @@ export function ClaudeView() {
     streamingUser,
     isStreaming,
     openToolMsgId,
+    cachedSlashCommands,
     send,
     stop,
     reset,
@@ -38,6 +40,9 @@ export function ClaudeView() {
   } = useClaude();
 
   const [input, setInput] = useState('');
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [slashDismissedFor, setSlashDismissedFor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const stickToBottomRef = useRef(true);
@@ -45,10 +50,10 @@ export function ClaudeView() {
   // Walk the thread once: build render items (no sys notes inline) and accumulate
   // the latest init system note so we can show the session/model/tools chip in
   // the bottom bar instead of repeating it every turn.
-  const { renderItems, sessionInfo } = useMemo(() => {
+  const { renderItems, sessionInfo, slashCommands } = useMemo(() => {
     const items: RenderItem[] = [];
     let latestInit: SystemNoteEvent | undefined;
-    if (!thread) return { renderItems: items, sessionInfo: undefined };
+    if (!thread) return { renderItems: items, sessionInfo: undefined, slashCommands: [] as string[] };
 
     const ingestNotes = (notes: SystemNoteEvent[]) => {
       for (const n of notes) {
@@ -102,6 +107,7 @@ export function ClaudeView() {
     }
 
     let info: SessionInfo | undefined;
+    let commands: string[] = [];
     if (latestInit) {
       info = {
         sessionId: typeof latestInit.session_id === 'string' ? latestInit.session_id : undefined,
@@ -110,8 +116,12 @@ export function ClaudeView() {
         permissionMode:
           typeof latestInit.permissionMode === 'string' ? latestInit.permissionMode : undefined,
       };
+      const raw = (latestInit as { slash_commands?: unknown }).slash_commands;
+      if (Array.isArray(raw)) {
+        commands = raw.filter((c): c is string => typeof c === 'string');
+      }
     }
-    return { renderItems: items, sessionInfo: info };
+    return { renderItems: items, sessionInfo: info, slashCommands: commands };
   }, [thread, streamingEvents, streamingUser, chatError]);
 
   // Find the bubble whose drawer is currently open. If the bubble disappears
@@ -149,14 +159,97 @@ export function ClaudeView() {
     await send(text);
   }, [input, send]);
 
+  // Slash-command popover triggers on the *token at the caret* — slash commands
+  // can appear anywhere in a message, not just at the start.
+  const slashContext = useMemo(
+    () => getActiveSlashContext(input, cursor),
+    [input, cursor],
+  );
+  const slashQuery = slashContext?.query ?? null;
+  // Prefer the live list derived from the current thread's init events (always
+  // accurate), but fall back to the per-cwd cache (warmed up on first launch)
+  // so autocomplete works before the first turn of a brand-new session.
+  const effectiveSlashCommands = slashCommands.length > 0 ? slashCommands : cachedSlashCommands;
+  const slashFiltered = useMemo(() => {
+    if (slashQuery === null) return [];
+    return filterCommands(effectiveSlashCommands, slashQuery);
+  }, [slashQuery, effectiveSlashCommands]);
+  const slashPopoverOpen =
+    slashContext !== null &&
+    slashFiltered.length > 0 &&
+    slashDismissedFor !== `${slashContext.start}:${slashContext.query}`;
+
+  // Keep slashIndex in range as the filter narrows
+  useEffect(() => {
+    if (slashIndex >= slashFiltered.length) setSlashIndex(0);
+  }, [slashFiltered.length, slashIndex]);
+
+  const acceptSlash = (cmd: string) => {
+    if (!slashContext) return;
+    const { start, tokenEnd } = slashContext;
+    const before = input.slice(0, start);
+    const after = input.slice(tokenEnd);
+    // Insert a trailing space only if there isn't already a space immediately after
+    const needsSpace = after.length === 0 || !/^\s/.test(after);
+    const insertion = `/${cmd}${needsSpace ? ' ' : ''}`;
+    const next = before + insertion + after;
+    setInput(next);
+    setSlashDismissedFor(`${start}:${cmd}`);
+    // restore textarea height + caret right after the inserted command
+    requestAnimationFrame(() => {
+      const el = composerRef.current;
+      if (el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+        el.focus();
+        const caret = before.length + insertion.length;
+        el.setSelectionRange(caret, caret);
+        setCursor(caret);
+      }
+    });
+  };
+
+  const syncCursor = (el: HTMLTextAreaElement) => {
+    setCursor(el.selectionStart ?? el.value.length);
+  };
+
   const onInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    // Any input edit clears the manual dismiss, so the popover can reappear.
+    setSlashDismissedFor(null);
+    setSlashIndex(0);
     const el = e.target;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    syncCursor(el);
   };
 
   const onComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashPopoverOpen) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const cmd = slashFiltered[slashIndex] ?? slashFiltered[0];
+        if (cmd) acceptSlash(cmd);
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashIndex((i) => (i + 1) % slashFiltered.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashIndex((i) => (i - 1 + slashFiltered.length) % slashFiltered.length);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (slashContext) {
+          setSlashDismissedFor(`${slashContext.start}:${slashContext.query}`);
+        }
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
@@ -228,6 +321,15 @@ export function ClaudeView() {
           </div>
 
           <div className={styles.composer}>
+            {slashPopoverOpen && (
+              <SlashCommandPopover
+                query={slashQuery ?? ''}
+                commands={effectiveSlashCommands}
+                selectedIndex={slashIndex}
+                onSelect={acceptSlash}
+                onHoverIndex={setSlashIndex}
+              />
+            )}
             <div className={styles.composerRow}>
               <span className={styles.composerPrompt}>{projectName} ❯</span>
               <textarea
@@ -237,6 +339,9 @@ export function ClaudeView() {
                 value={input}
                 onChange={onInputChange}
                 onKeyDown={onComposerKey}
+                onKeyUp={(e) => syncCursor(e.currentTarget)}
+                onClick={(e) => syncCursor(e.currentTarget)}
+                onSelect={(e) => syncCursor(e.currentTarget)}
                 placeholder={isStreaming ? 'claude is responding…' : 'send a message — enter to send, shift+enter for newline'}
                 disabled={isStreaming}
               />
@@ -283,6 +388,26 @@ function InfoChip({ k, v }: { k: string; v: string }) {
       <span className={styles.infoChipValue}>{v}</span>
     </span>
   );
+}
+
+interface SlashContext {
+  start: number;     // index in input where the slash token starts
+  tokenEnd: number;  // index in input where the slash token ends (exclusive)
+  query: string;     // text typed so far between the slash and the caret
+}
+
+// Find the slash token containing the caret, if any. The token runs from the
+// preceding whitespace (or start of input) up to the next whitespace (or end).
+// We use only the portion *before* the caret as the filter query so users can
+// edit mid-token without the popover jumping around on them.
+function getActiveSlashContext(input: string, caret: number): SlashContext | null {
+  let start = caret;
+  while (start > 0 && !/\s/.test(input[start - 1])) start--;
+  let tokenEnd = caret;
+  while (tokenEnd < input.length && !/\s/.test(input[tokenEnd])) tokenEnd++;
+  const typed = input.slice(start, caret);
+  if (!/^\/[\w:-]*$/.test(typed)) return null;
+  return { start, tokenEnd, query: typed.slice(1) };
 }
 
 interface ItemRowProps {
