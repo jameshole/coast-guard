@@ -32,6 +32,8 @@ export function ClaudeView() {
     isStreaming,
     openToolMsgId,
     cachedSlashCommands,
+    draft,
+    setDraft,
     send,
     stop,
     reset,
@@ -39,10 +41,14 @@ export function ClaudeView() {
     closeTools,
   } = useClaude();
 
-  const [input, setInput] = useState('');
+  // The draft text lives in ClaudeContext so it survives view toggles.
+  const input = draft;
+  const setInput = setDraft;
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashDismissedFor, setSlashDismissedFor] = useState<string | null>(null);
-  const [cursor, setCursor] = useState(0);
+  // Initialize cursor at the end of any existing draft so the popover doesn't
+  // auto-open on a remount whose draft happens to start with "/".
+  const [cursor, setCursor] = useState(() => draft.length);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const stickToBottomRef = useRef(true);
@@ -149,6 +155,16 @@ export function ClaudeView() {
   useLayoutEffect(() => {
     if (stickToBottomRef.current) scrollToBottom();
   }, [renderItems.length, streamingEvents, scrollToBottom]);
+
+  // Resize the textarea on mount so a persisted multi-line draft renders at the
+  // right height instead of getting clipped to rows={1}.
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();

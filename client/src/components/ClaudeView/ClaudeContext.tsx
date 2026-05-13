@@ -17,6 +17,8 @@ interface ClaudeContextValue {
   openToolMsgId: string | null;
   unread: boolean;
   cachedSlashCommands: string[];
+  draft: string;
+  setDraft: (text: string) => void;
   send: (text: string) => Promise<void>;
   stop: () => void;
   reset: () => Promise<void>;
@@ -41,6 +43,7 @@ export function ClaudeProvider({ children, isActive }: ClaudeProviderProps) {
   const [openToolMsgId, setOpenToolMsgId] = useState<string | null>(null);
   const [unread, setUnread] = useState(false);
   const [cachedSlashCommands, setCachedSlashCommands] = useState<string[]>([]);
+  const [draft, setDraft] = useState('');
 
   const stopRef = useRef<AbortController | null>(null);
   const isActiveRef = useRef(isActive);
@@ -160,13 +163,15 @@ export function ClaudeProvider({ children, isActive }: ClaudeProviderProps) {
     openToolMsgId,
     unread,
     cachedSlashCommands,
+    draft,
+    setDraft,
     send,
     stop,
     reset,
     toggleTools,
     closeTools,
     clearChatError,
-  }), [thread, loadError, chatError, streamingEvents, streamingUser, openToolMsgId, unread, cachedSlashCommands, send, stop, reset, toggleTools, closeTools, clearChatError]);
+  }), [thread, loadError, chatError, streamingEvents, streamingUser, openToolMsgId, unread, cachedSlashCommands, draft, send, stop, reset, toggleTools, closeTools, clearChatError]);
 
   return <ClaudeContext.Provider value={value}>{children}</ClaudeContext.Provider>;
 }
