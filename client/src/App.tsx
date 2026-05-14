@@ -174,10 +174,6 @@ function AppContent() {
     setComments((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  const handleClearCurrentFile = useCallback(() => {
-    setComments((prev) => prev.filter((c) => c.filePath !== selectedFile));
-  }, [selectedFile]);
-
   const handleClearAll = useCallback(() => {
     setComments([]);
   }, []);
@@ -290,8 +286,8 @@ function AppContent() {
                 currentFile={selectedFile}
                 onAddComment={handleAddComment}
                 onDeleteComment={handleDeleteComment}
-                onClearCurrentFile={handleClearCurrentFile}
                 onClearAll={handleClearAll}
+                onFocusClaude={() => setMainView('claude')}
                 pendingSelection={pendingSelection}
                 onCancelSelection={handleCancelSelection}
               />

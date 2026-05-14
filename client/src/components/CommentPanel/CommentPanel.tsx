@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Copy, Trash2, MessageSquarePlus, X } from 'lucide-react';
+import { Copy, Trash2, Send, MessageSquarePlus, X } from 'lucide-react';
+import { useClaude } from '../ClaudeView';
 import styles from './CommentPanel.module.css';
 
 export interface Comment {
@@ -15,17 +16,20 @@ interface CommentPanelProps {
   currentFile: string | null;
   onAddComment: (comment: Omit<Comment, 'id'>) => void;
   onDeleteComment: (id: string) => void;
-  onClearCurrentFile: () => void;
   onClearAll: () => void;
+  /** Bring the Claude chat view into focus (used by the Send action). */
+  onFocusClaude: () => void;
   /** When set, shows the "add comment" form for this line range */
   pendingSelection: { startLine: number; endLine: number } | null;
   onCancelSelection: () => void;
 }
 
 function formatCommentsForCopy(comments: Comment[]): string {
+  // Bold location line + body, separated by blank lines. Avoids `---` (a markdown
+  // thematic break) which renders badly when sent into the Claude chat.
   return comments
-    .map((c) => `${c.filePath} lines:${c.startLine}-${c.endLine}\n${c.body}`)
-    .join('\n---\n');
+    .map((c) => `**${c.filePath}:${c.startLine}-${c.endLine}**\n\n${c.body}`)
+    .join('\n\n');
 }
 
 export function CommentPanel({
@@ -33,25 +37,26 @@ export function CommentPanel({
   currentFile,
   onAddComment,
   onDeleteComment,
-  onClearCurrentFile,
   onClearAll,
+  onFocusClaude,
   pendingSelection,
   onCancelSelection,
 }: CommentPanelProps) {
   const [newCommentBody, setNewCommentBody] = useState('');
+  const { send, isStreaming } = useClaude();
 
   const currentFileComments = comments.filter((c) => c.filePath === currentFile);
-  const hasCurrentFileComments = currentFileComments.length > 0;
   const hasAnyComments = comments.length > 0;
 
-  const handleCopyCurrentFile = () => {
-    if (!hasCurrentFileComments) return;
-    navigator.clipboard.writeText(formatCommentsForCopy(currentFileComments));
-  };
-
-  const handleCopyAll = () => {
+  const handleCopy = () => {
     if (!hasAnyComments) return;
     navigator.clipboard.writeText(formatCommentsForCopy(comments));
+  };
+
+  const handleSend = () => {
+    if (!hasAnyComments || isStreaming) return;
+    onFocusClaude();
+    void send(formatCommentsForCopy(comments));
   };
 
   const handleSubmitComment = () => {
@@ -84,39 +89,30 @@ export function CommentPanel({
         <div className={styles.actions}>
           <button
             className={styles.actionBtn}
-            onClick={handleCopyCurrentFile}
-            disabled={!hasCurrentFileComments}
-            title="Copy current file comments"
-          >
-            <Copy size={14} />
-            <span>File</span>
-          </button>
-          <button
-            className={styles.actionBtn}
-            onClick={handleCopyAll}
+            onClick={handleCopy}
             disabled={!hasAnyComments}
             title="Copy all comments"
           >
             <Copy size={14} />
-            <span>All</span>
-          </button>
-          <button
-            className={styles.actionBtn}
-            onClick={onClearCurrentFile}
-            disabled={!hasCurrentFileComments}
-            title="Clear current file comments"
-          >
-            <Trash2 size={14} />
-            <span>File</span>
+            <span>Copy</span>
           </button>
           <button
             className={styles.actionBtn}
             onClick={onClearAll}
             disabled={!hasAnyComments}
-            title="Clear all comments"
+            title="Delete all comments"
           >
             <Trash2 size={14} />
-            <span>All</span>
+            <span>Delete</span>
+          </button>
+          <button
+            className={styles.actionBtn}
+            onClick={handleSend}
+            disabled={!hasAnyComments || isStreaming}
+            title={isStreaming ? 'Claude is responding…' : 'Send all comments to Claude'}
+          >
+            <Send size={14} />
+            <span>Send</span>
           </button>
         </div>
       </div>
