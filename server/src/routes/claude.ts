@@ -5,6 +5,17 @@ import { SlashCommandsCache } from '../services/slashCommandsCache.js';
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
 
+// The chat UI turns backticked `path:line` references into clickable links, but
+// only if the path is complete — an abbreviated path can't be resolved. Claude
+// already uses the backtick format reliably; this just stops it shortening paths.
+const FILE_REF_SYSTEM_PROMPT =
+  'When you reference a file location, write the COMPLETE project-relative path ' +
+  'in backticks with a line number — e.g. `src/app/pages/foo/bar.component.ts:42` ' +
+  '(or `:42-58` for a range). Never abbreviate the path with `...` or omit ' +
+  'directories; always give the full path from the project root. This applies ' +
+  'everywhere, including inside tables, lists, and headings — no matter how ' +
+  'long the path is or how cramped the layout, never shorten it.';
+
 export function createClaudeRouter(projectPath: string): Router {
   const router = Router();
   const store = new ThreadStore(projectPath);
@@ -56,6 +67,7 @@ export function createClaudeRouter(projectPath: string): Router {
 
     const args = [
       '-p', content,
+      '--append-system-prompt', FILE_REF_SYSTEM_PROMPT,
       '--output-format', 'stream-json',
       '--verbose',
       '--include-partial-messages',

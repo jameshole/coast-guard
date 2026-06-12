@@ -182,6 +182,15 @@ function AppContent() {
     setPendingSelection(null);
   }, []);
 
+  // Open a file:line reference clicked inside a Claude chat message in the editor.
+  const handleOpenFileRef = useCallback((path: string, line: number) => {
+    setSelectedFile(path);
+    setTargetLine(line);
+    setPendingSelection(null);
+    setMarkdownCodeView(false);
+    setMainView('editor');
+  }, []);
+
   // Set of line numbers that have comments in the current file (used by per-line code views)
   const commentedLines = useMemo(() => {
     if (!selectedFile) return new Set<number>();
@@ -272,7 +281,7 @@ function AppContent() {
 
   return (
     <ScriptsProvider>
-    <ClaudeProvider isActive={mainView === 'claude'}>
+    <ClaudeProvider isActive={mainView === 'claude'} onOpenFileRef={handleOpenFileRef}>
       <Layout
         sidebar={
           <Sidebar

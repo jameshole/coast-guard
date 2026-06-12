@@ -19,6 +19,8 @@ interface ClaudeContextValue {
   cachedSlashCommands: string[];
   draft: string;
   setDraft: (text: string) => void;
+  /** Open a file reference (from a chat message) in the editor view. */
+  openFileRef: (path: string, line: number) => void;
   send: (text: string) => Promise<void>;
   stop: () => void;
   reset: () => Promise<void>;
@@ -32,9 +34,10 @@ const ClaudeContext = createContext<ClaudeContextValue | null>(null);
 interface ClaudeProviderProps {
   children: ReactNode;
   isActive: boolean;
+  onOpenFileRef: (path: string, line: number) => void;
 }
 
-export function ClaudeProvider({ children, isActive }: ClaudeProviderProps) {
+export function ClaudeProvider({ children, isActive, onOpenFileRef }: ClaudeProviderProps) {
   const [thread, setThread] = useState<Thread | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -165,13 +168,14 @@ export function ClaudeProvider({ children, isActive }: ClaudeProviderProps) {
     cachedSlashCommands,
     draft,
     setDraft,
+    openFileRef: onOpenFileRef,
     send,
     stop,
     reset,
     toggleTools,
     closeTools,
     clearChatError,
-  }), [thread, loadError, chatError, streamingEvents, streamingUser, openToolMsgId, unread, cachedSlashCommands, draft, send, stop, reset, toggleTools, closeTools, clearChatError]);
+  }), [thread, loadError, chatError, streamingEvents, streamingUser, openToolMsgId, unread, cachedSlashCommands, draft, onOpenFileRef, send, stop, reset, toggleTools, closeTools, clearChatError]);
 
   return <ClaudeContext.Provider value={value}>{children}</ClaudeContext.Provider>;
 }

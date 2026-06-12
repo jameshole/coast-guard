@@ -25,10 +25,11 @@ interface CommentPanelProps {
 }
 
 function formatCommentsForCopy(comments: Comment[]): string {
-  // Bold location line + body, separated by blank lines. Avoids `---` (a markdown
-  // thematic break) which renders badly when sent into the Claude chat.
+  // Backticked location + body, separated by blank lines. The backticks make the
+  // location render as a clickable file reference in the Claude chat; avoiding
+  // `---` (a markdown thematic break) keeps the rendered output clean.
   return comments
-    .map((c) => `**${c.filePath}:${c.startLine}-${c.endLine}**\n\n${c.body}`)
+    .map((c) => `\`${c.filePath}:${c.startLine}-${c.endLine}\`\n\n${c.body}`)
     .join('\n\n');
 }
 
