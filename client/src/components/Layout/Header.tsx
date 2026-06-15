@@ -3,6 +3,7 @@ import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Co
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import { useClaude } from '../ClaudeView';
+import { isTypingTarget } from '../../utils/keyboard';
 import styles from './Header.module.css';
 
 function isMarkdownFile(path: string): boolean {
@@ -91,6 +92,21 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, mark
     [currentDiffIndex, getDiffChunks]
   );
 
+  // n/m jump between diff hunks in the open file (m = next, n = previous, same
+  // wrap behavior as the chevron buttons). Editor view only — plain characters
+  // must not steal keys from the Claude view.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'm' && e.key !== 'n') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (mainView !== 'editor' || isTypingTarget(e.target)) return;
+      e.preventDefault();
+      navigateDiff(e.key === 'm' ? 'down' : 'up');
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mainView, navigateDiff]);
+
   return (
     <header className={styles.header}>
       <div className={styles.projectInfo}>
@@ -140,7 +156,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, mark
           <button
             className={styles.diffNavButton}
             onClick={() => navigateDiff('up')}
-            title="Previous change"
+            title="Previous change (n)"
           >
             <ChevronUp size={16} />
           </button>
@@ -151,7 +167,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, mark
           <button
             className={styles.diffNavButton}
             onClick={() => navigateDiff('down')}
-            title="Next change"
+            title="Next change (m)"
           >
             <ChevronDown size={16} />
           </button>

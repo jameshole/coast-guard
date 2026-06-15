@@ -16,9 +16,11 @@ interface SidebarProps {
   commentPanel: ReactNode;
   scriptsPanel: ReactNode;
   pendingSelection: { startLine: number; endLine: number } | null;
+  /** Whether plain-character shortcuts (j/k file navigation) may fire. */
+  shortcutsEnabled: boolean;
 }
 
-export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel, scriptsPanel, pendingSelection }: SidebarProps) {
+export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel, scriptsPanel, pendingSelection, shortcutsEnabled }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>('explorer');
   const [collapsed, setCollapsed] = useState(false);
   const [contentWidth, setContentWidth] = useState(260);
@@ -161,7 +163,7 @@ export function Sidebar({ onFileSelect, selectedFile, commentCount, commentPanel
             <FileTree onFileSelect={onFileSelect} selectedFile={selectedFile} />
           )}
           {!collapsed && activeTab === 'source-control' && (
-            <GitChangedFiles onFileSelect={onFileSelect} selectedFile={selectedFile} />
+            <GitChangedFiles onFileSelect={onFileSelect} selectedFile={selectedFile} shortcutsEnabled={shortcutsEnabled} />
           )}
           {!collapsed && activeTab === 'comments' && commentPanel}
           {!collapsed && activeTab === 'scripts' && scriptsPanel}

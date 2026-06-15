@@ -289,6 +289,7 @@ function AppContent() {
             selectedFile={selectedFile}
             commentCount={comments.length}
             pendingSelection={pendingSelection}
+            shortcutsEnabled={mainView === 'editor'}
             commentPanel={
               <CommentPanel
                 comments={comments}

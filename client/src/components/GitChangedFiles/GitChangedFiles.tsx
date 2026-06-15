@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Circle } from 'lucide-react';
 import { useChangedFiles, useDiffStats } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
 import { getFileIcon, getFileIconColor } from '../FileTree/fileIcons';
+import { isTypingTarget } from '../../utils/keyboard';
 import type { GitFileStatus } from '../../types';
 import { DiffBasePicker } from './DiffBasePicker';
 import styles from './GitChangedFiles.module.css';
@@ -10,6 +11,8 @@ import styles from './GitChangedFiles.module.css';
 interface GitChangedFilesProps {
   onFileSelect: (path: string) => void;
   selectedFile: string | null;
+  /** Gates the j/k shortcuts so they don't fire while the Claude view is up. */
+  shortcutsEnabled: boolean;
 }
 
 interface ChangedFile {
@@ -30,10 +33,11 @@ const statusColor: Record<GitFileStatus, string> = {
   untracked: 'var(--git-untracked)',
 };
 
-export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesProps) {
+export function GitChangedFiles({ onFileSelect, selectedFile, shortcutsEnabled }: GitChangedFilesProps) {
   const { baseRef } = useDiffBase();
   const { data: changedFiles, isLoading } = useChangedFiles(baseRef);
   const { data: diffStats } = useDiffStats(baseRef);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const files = useMemo((): ChangedFile[] => {
     if (!changedFiles) return [];
@@ -51,6 +55,34 @@ export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesP
         return a.path.localeCompare(b.path);
       });
   }, [changedFiles]);
+
+  // z/x walk the changed-file list (x = next, z = previous, wrapping at the
+  // ends). Only mounted while the source-control tab is open, so the shortcut
+  // is scoped to that context.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'x' && e.key !== 'z') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (!shortcutsEnabled || isTypingTarget(e.target) || files.length === 0) return;
+      e.preventDefault();
+      const index = files.findIndex((f) => f.path === selectedFile);
+      const next =
+        e.key === 'x'
+          ? index < files.length - 1 ? index + 1 : 0
+          : index > 0 ? index - 1 : files.length - 1;
+      onFileSelect(files[next].path);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [files, selectedFile, onFileSelect, shortcutsEnabled]);
+
+  // Keep the selected file visible as j/k move it past the list's scroll edges.
+  useEffect(() => {
+    if (!selectedFile) return;
+    listRef.current
+      ?.querySelector(`[data-path="${CSS.escape(selectedFile)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [selectedFile]);
 
   const hasStats =
     diffStats && (diffStats.filesChanged > 0 || diffStats.insertions > 0 || diffStats.deletions > 0);
@@ -70,7 +102,7 @@ export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesP
           <span className={styles.statsDeletions}>−{diffStats.deletions}</span>
         </div>
       )}
-      <div className={styles.fileList}>
+      <div className={styles.fileList} ref={listRef}>
         {isLoading ? (
           <div className={styles.loading}>
             <span>Loading...</span>
@@ -89,6 +121,7 @@ export function GitChangedFiles({ onFileSelect, selectedFile }: GitChangedFilesP
               <div
                 key={file.path}
                 className={`${styles.file} ${isSelected ? styles.selected : ''}`}
+                data-path={file.path}
                 onClick={() => onFileSelect(file.path)}
                 title={file.path}
               >
