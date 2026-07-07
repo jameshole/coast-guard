@@ -30,7 +30,7 @@ export class FileService {
   }
 
   private isIgnored(name: string): boolean {
-    return IGNORED_PATTERNS.includes(name) || name.startsWith('.');
+    return IGNORED_PATTERNS.includes(name);
   }
 
   private validatePath(requestedPath: string): string {
