@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import { useFileContent } from '../../hooks/useFileContent';
-import { useFileDiff } from '../../hooks/useGitStatus';
+import { useFileDiff, useFileBlame } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
 import { DiffGutter } from './DiffGutter';
-import type { LineDiff } from '../../types';
+import { formatRelativeTime } from '../../utils/time';
+import type { LineDiff, BlameHunk } from '../../types';
 import styles from './CodeViewer.module.css';
 
 interface TokenInfo {
@@ -33,6 +34,21 @@ interface CodeViewerProps {
   commentedLines?: Set<number>;
   onGoToDefinition?: (filePath: string, offset: number) => void;
   targetLine?: number | null;
+  showBlame?: boolean;
+}
+
+// Blame column sizing (px). Width persists across sessions.
+const BLAME_WIDTH_KEY = 'coastGuard.blameColumnWidth';
+const BLAME_MIN_WIDTH = 80;
+const BLAME_MAX_WIDTH = 400;
+const BLAME_DEFAULT_WIDTH = 170;
+
+// One blame cell per contiguous run of display rows sharing a hunk; rendered
+// with rowSpan so the label can stick to the viewport top while scrolling.
+interface BlameSpanInfo {
+  hunk: BlameHunk | null;
+  hunkIndex: number; // -1 when no blame info covers these rows
+  span: number;
 }
 
 // Language detection from file extension
@@ -151,14 +167,24 @@ function isIdentifierToken(scopes: string[]): boolean {
   return true;
 }
 
-export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine }: CodeViewerProps) {
+export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine, showBlame = false }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const { baseRef } = useDiffBase();
   const { data: diffData } = useFileDiff(filePath, ignoreWhitespace, baseRef);
+  // Blame is only fetched while the column is toggled on
+  const { data: blameData } = useFileBlame(showBlame ? filePath : null);
   const [highlightedLines, setHighlightedLines] = useState<TokenInfo[][]>([]);
   const [highlightedRemovedLines, setHighlightedRemovedLines] = useState<Map<string, string>>(new Map());
   const [isHighlighting, setIsHighlighting] = useState(false);
   const [cmdHeld, setCmdHeld] = useState(false);
+
+  // Blame column: persisted width, hover tooltip, and in-flight drag state
+  const [blameWidth, setBlameWidth] = useState<number>(() => {
+    const stored = Number(localStorage.getItem(BLAME_WIDTH_KEY));
+    return stored >= BLAME_MIN_WIDTH && stored <= BLAME_MAX_WIDTH ? stored : BLAME_DEFAULT_WIDTH;
+  });
+  const [blameTooltip, setBlameTooltip] = useState<{ hunk: BlameHunk; left: number; top: number } | null>(null);
+  const blameResize = useRef<{ startX: number; startWidth: number; lastWidth: number } | null>(null);
 
   // Line selection state for commenting
   const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
@@ -245,8 +271,76 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
     }
   }, [filePath, onGoToDefinition]);
 
+  const handleBlameHover = useCallback((hunk: BlameHunk, cell: HTMLTableCellElement) => {
+    if (blameResize.current) return;
+    // Anchor beside the label, which may be stuck to the viewport top mid-hunk
+    const label = cell.querySelector('[data-blame-label]');
+    const anchorTop = (label ?? cell).getBoundingClientRect().top;
+    setBlameTooltip({
+      hunk,
+      left: cell.getBoundingClientRect().right + 8,
+      top: Math.max(8, Math.min(anchorTop - 4, window.innerHeight - 110)),
+    });
+  }, []);
+
+  const handleBlameLeave = useCallback(() => setBlameTooltip(null), []);
+
+  const handleBlameResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    blameResize.current = { startX: e.clientX, startWidth: blameWidth, lastWidth: blameWidth };
+    setBlameTooltip(null);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [blameWidth]);
+
+  // Drag-resize the blame column. Width is applied straight to the CSS variable
+  // during the drag (no re-render per mousemove) and committed to state +
+  // localStorage on mouseup.
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const drag = blameResize.current;
+      if (!drag || !containerRef.current) return;
+      const width = Math.max(
+        BLAME_MIN_WIDTH,
+        Math.min(BLAME_MAX_WIDTH, drag.startWidth + e.clientX - drag.startX),
+      );
+      drag.lastWidth = width;
+      containerRef.current.style.setProperty('--blame-width', `${width}px`);
+    };
+    const handleMouseUp = () => {
+      const drag = blameResize.current;
+      if (!drag) return;
+      blameResize.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setBlameWidth(drag.lastWidth);
+      localStorage.setItem(BLAME_WIDTH_KEY, String(drag.lastWidth));
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
   const content = fileData?.content || '';
   const language = filePath ? detectLanguage(filePath) : 'plaintext';
+
+  // Map each line number to its blame hunk; the hunk index drives the
+  // alternating background tint that makes hunk boundaries readable.
+  const blameByLine = useMemo(() => {
+    if (!blameData || blameData.hunks.length === 0) return null;
+    const map = new Map<number, { hunk: BlameHunk; hunkIndex: number }>();
+    blameData.hunks.forEach((hunk, hunkIndex) => {
+      for (let l = hunk.startLine; l < hunk.startLine + hunk.lineCount; l++) {
+        map.set(l, { hunk, hunkIndex });
+      }
+    });
+    return map;
+  }, [blameData]);
+
+  const blameVisible = showBlame && blameByLine !== null;
 
   // Build merged display lines including removed lines from diff
   const displayLines = useMemo(() => {
@@ -358,6 +452,42 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
 
     return lines;
   }, [highlightedLines, diffData]);
+
+  // Group consecutive display rows by blame hunk. Each group renders a single
+  // rowSpan cell (sparse array: entries only at group starts). Removed diff
+  // lines aren't in the working tree, so they inherit the neighbouring hunk to
+  // keep groups contiguous.
+  const blameSpans = useMemo(() => {
+    if (!blameByLine || displayLines.length === 0) return null;
+    const INHERIT = -2;
+
+    const rowHunk: number[] = displayLines.map((line) =>
+      line.type === 'current' && line.newLineNumber !== null
+        ? blameByLine.get(line.newLineNumber)?.hunkIndex ?? -1
+        : INHERIT,
+    );
+    for (let i = 1; i < rowHunk.length; i++) {
+      if (rowHunk[i] === INHERIT) rowHunk[i] = rowHunk[i - 1];
+    }
+    if (rowHunk[rowHunk.length - 1] === INHERIT) rowHunk[rowHunk.length - 1] = -1;
+    for (let i = rowHunk.length - 2; i >= 0; i--) {
+      if (rowHunk[i] === INHERIT) rowHunk[i] = rowHunk[i + 1];
+    }
+
+    const spans: Array<BlameSpanInfo | undefined> = new Array(displayLines.length);
+    let i = 0;
+    while (i < displayLines.length) {
+      let j = i + 1;
+      while (j < displayLines.length && rowHunk[j] === rowHunk[i]) j++;
+      spans[i] = {
+        hunkIndex: rowHunk[i],
+        hunk: rowHunk[i] >= 0 ? blameData?.hunks[rowHunk[i]] ?? null : null,
+        span: j - i,
+      };
+      i = j;
+    }
+    return spans;
+  }, [displayLines, blameByLine, blameData]);
 
   useEffect(() => {
     if (!content) {
@@ -504,7 +634,11 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
   }
 
   return (
-    <div ref={containerRef} className={`${styles.container} ${cmdHeld ? styles.cmdHeld : ''}`}>
+    <div
+      ref={containerRef}
+      className={`${styles.container} ${cmdHeld ? styles.cmdHeld : ''}`}
+      style={{ '--blame-width': `${blameWidth}px` } as React.CSSProperties}
+    >
       <div className={styles.codeWrapper}>
         <table className={styles.codeTable}>
           <tbody>
@@ -529,6 +663,15 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
                   <td className={styles.gutter}>
                     <DiffGutter diff={diffInfo} />
                   </td>
+                  {blameVisible && blameSpans?.[index] && (
+                    <BlameCell
+                      info={blameSpans[index]!}
+                      commitUrlBase={blameData?.commitUrlBase ?? null}
+                      onHover={handleBlameHover}
+                      onLeave={handleBlameLeave}
+                      onResizeStart={handleBlameResizeStart}
+                    />
+                  )}
                   <td
                     className={`${styles.lineNumber} ${isRemoved ? styles.oldLineNumber : ''}`}
                     onMouseDown={lineNum ? (e) => handleLineMouseDown(lineNum, e) : undefined}
@@ -554,7 +697,106 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
           </tbody>
         </table>
       </div>
+      {blameTooltip && (
+        <div
+          className={styles.blameTooltip}
+          style={{ left: blameTooltip.left, top: blameTooltip.top }}
+        >
+          {blameTooltip.hunk.isUncommitted ? (
+            <div className={styles.blameTooltipAuthor}>Not committed yet</div>
+          ) : (
+            <>
+              <div className={styles.blameTooltipAuthor}>
+                {blameTooltip.hunk.author}
+                <span className={styles.blameTooltipMuted}> · {formatRelativeAge(blameTooltip.hunk.authorTime)}</span>
+              </div>
+              <div className={styles.blameTooltipMuted}>{formatFullDate(blameTooltip.hunk.authorTime)}</div>
+              <div className={styles.blameTooltipCommit}>
+                <span className={styles.blameTooltipSha}>{blameTooltip.hunk.shortSha}</span>{' '}
+                {blameTooltip.hunk.summary}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function formatRelativeAge(unixSeconds: number): string {
+  const rel = formatRelativeTime(unixSeconds);
+  return rel === 'now' ? 'just now' : `${rel} ago`;
+}
+
+function formatFullDate(unixSeconds: number): string {
+  const date = new Date(unixSeconds * 1000);
+  const day = date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return `${day} at ${time}`;
+}
+
+// Blame annotation cell: one per hunk (rowSpan covers the hunk's rows), with a
+// sticky label that pins to the viewport top while its hunk scrolls past, and
+// a link to the commit on GitHub when a remote is configured.
+interface BlameCellProps {
+  info: BlameSpanInfo;
+  commitUrlBase: string | null;
+  onHover: (hunk: BlameHunk, cell: HTMLTableCellElement) => void;
+  onLeave: () => void;
+  onResizeStart: (e: React.MouseEvent) => void;
+}
+
+function BlameCell({ info, commitUrlBase, onHover, onLeave, onResizeStart }: BlameCellProps) {
+  const { hunk, hunkIndex, span } = info;
+
+  const cellClass = [
+    styles.blameCell,
+    hunkIndex >= 0 && hunkIndex % 2 === 1 ? styles.blameTinted : '',
+    hunk?.isUncommitted ? styles.blameUncommitted : '',
+  ].filter(Boolean).join(' ');
+
+  const resizeHandle = <div className={styles.blameResizeHandle} onMouseDown={onResizeStart} />;
+
+  if (!hunk) {
+    return (
+      <td className={cellClass} rowSpan={span}>
+        {resizeHandle}
+      </td>
+    );
+  }
+
+  const label = hunk.isUncommitted ? (
+    <span>Uncommitted</span>
+  ) : (
+    <>
+      <span>{hunk.author}</span>
+      <span className={styles.blameTime}> · {formatRelativeTime(hunk.authorTime)}</span>
+    </>
+  );
+
+  return (
+    <td
+      className={cellClass}
+      rowSpan={span}
+      onMouseEnter={(e) => onHover(hunk, e.currentTarget)}
+      onMouseLeave={onLeave}
+    >
+      <div className={styles.blameLabel} data-blame-label>
+        {!hunk.isUncommitted && commitUrlBase ? (
+          <a
+            className={styles.blameLink}
+            href={`${commitUrlBase}/${hunk.sha}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {label}
+          </a>
+        ) : (
+          label
+        )}
+      </div>
+      {resizeHandle}
+    </td>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Code, FileText, MessageSquare } from 'lucide-react';
+import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Code, FileText, MessageSquare, History } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import { useClaude } from '../ClaudeView';
@@ -15,13 +15,15 @@ interface HeaderProps {
   currentFile: string | null;
   ignoreWhitespace: boolean;
   onToggleWhitespace: () => void;
+  showBlame: boolean;
+  onToggleBlame: () => void;
   markdownCodeView: boolean;
   onToggleMarkdownCodeView: () => void;
   mainView: 'editor' | 'claude';
   onToggleMainView: () => void;
 }
 
-export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, markdownCodeView, onToggleMarkdownCodeView, mainView, onToggleMainView }: HeaderProps) {
+export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, showBlame, onToggleBlame, markdownCodeView, onToggleMarkdownCodeView, mainView, onToggleMainView }: HeaderProps) {
   const { data: projectInfo } = useProjectInfo();
   const { data: gitCheck } = useGitCheck();
   const { data: gitBranch } = useGitBranch();
@@ -177,6 +179,18 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, mark
             title={ignoreWhitespace ? 'Showing diff without whitespace changes' : 'Showing all diff changes'}
           >
             <Space size={16} />
+          </button>
+        </div>
+      )}
+
+      {gitCheck?.isGitRepo && currentFile && mainView === 'editor' && (!isMarkdownFile(currentFile) || markdownCodeView) && (
+        <div className={styles.diffNav}>
+          <button
+            className={`${styles.diffNavButton} ${showBlame ? styles.diffNavButtonActive : ''}`}
+            onClick={onToggleBlame}
+            title={showBlame ? 'Hide git blame (b)' : 'Show git blame (b)'}
+          >
+            <History size={16} />
           </button>
         </div>
       )}

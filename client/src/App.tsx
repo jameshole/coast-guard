@@ -12,6 +12,7 @@ import { ClaudeView, ClaudeProvider } from './components/ClaudeView';
 import { ScriptsProvider, ScriptsPanel } from './components/ScriptsPanel';
 import type { DefinitionResult } from './types';
 import { api } from './services/api';
+import { isTypingTarget } from './utils/keyboard';
 import { useFileWatcher } from './hooks/useFileWatcher';
 import { useProjectInfo } from './hooks/useFileTree';
 import { DiffBaseProvider } from './hooks/useDiffBase';
@@ -53,6 +54,7 @@ function AppContent() {
   );
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+  const [showBlame, setShowBlame] = useState(false);
   const [markdownCodeView, setMarkdownCodeView] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ startLine: number; endLine: number } | null>(null);
@@ -161,6 +163,20 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // b toggles the git blame column in the code view. Editor view only — plain
+  // characters must not steal keys from the Claude view.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'b') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (mainView !== 'editor' || isTypingTarget(e.target)) return;
+      e.preventDefault();
+      setShowBlame((v) => !v);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mainView]);
+
   const handleLineSelectionComplete = useCallback((startLine: number, endLine: number) => {
     setPendingSelection({ startLine, endLine });
   }, []);
@@ -244,6 +260,7 @@ function AppContent() {
         commentedLines={commentedLines}
         onGoToDefinition={handleGoToDefinition}
         targetLine={targetLine}
+        showBlame={showBlame}
       />
     );
   };
@@ -309,6 +326,8 @@ function AppContent() {
         currentFile={selectedFile}
         ignoreWhitespace={ignoreWhitespace}
         onToggleWhitespace={() => setIgnoreWhitespace(prev => !prev)}
+        showBlame={showBlame}
+        onToggleBlame={() => setShowBlame(prev => !prev)}
         markdownCodeView={markdownCodeView}
         onToggleMarkdownCodeView={() => setMarkdownCodeView(prev => !prev)}
         mainView={mainView}

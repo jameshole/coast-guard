@@ -38,6 +38,22 @@ export interface DiffStats {
   deletions: number;
 }
 
+export interface BlameHunk {
+  sha: string;
+  shortSha: string;
+  author: string;
+  authorTime: number;
+  summary: string;
+  startLine: number;
+  lineCount: number;
+  isUncommitted: boolean;
+}
+
+export interface FileBlame {
+  hunks: BlameHunk[];
+  commitUrlBase: string | null;
+}
+
 export interface DefinitionResult {
   filePath: string;
   line: number;

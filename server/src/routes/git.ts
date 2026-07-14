@@ -106,6 +106,24 @@ export function createGitRouter(gitService: GitService): Router {
     }
   });
 
+  // Get per-line blame info for a file (working tree)
+  router.get('/blame', async (req: Request, res: Response) => {
+    try {
+      const file = req.query.file as string;
+
+      if (!file) {
+        res.status(400).json({ error: 'File path is required' });
+        return;
+      }
+
+      const blame = await gitService.getFileBlame(file);
+      res.json(blame);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: message });
+    }
+  });
+
   // Get all changed files with their status
   router.get('/changed-files', async (req: Request, res: Response) => {
     try {

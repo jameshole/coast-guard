@@ -49,9 +49,10 @@ export function useFileWatcher(currentFile: string | null): { connected: boolean
           }
 
           if (data.type === 'change' && data.path) {
-            // Specific file changed - invalidate its content and diff
+            // Specific file changed - invalidate its content, diff, and blame
             queryClient.invalidateQueries({ queryKey: ['fileContent', data.path] });
             queryClient.invalidateQueries({ queryKey: ['fileDiff', data.path] });
+            queryClient.invalidateQueries({ queryKey: ['fileBlame', data.path] });
           }
 
           if (data.type === 'gitStatus') {
@@ -63,6 +64,7 @@ export function useFileWatcher(currentFile: string | null): { connected: boolean
             // This ensures reopening a previously viewed file shows fresh content
             queryClient.invalidateQueries({ queryKey: ['fileContent'] });
             queryClient.invalidateQueries({ queryKey: ['fileDiff'] });
+            queryClient.invalidateQueries({ queryKey: ['fileBlame'] });
 
             // Also refresh file tree in case files were added/removed
             queryClient.invalidateQueries({ queryKey: ['fileTree'] });

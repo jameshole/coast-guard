@@ -52,6 +52,17 @@ export function useDiffStats(baseRef: string = 'HEAD') {
   });
 }
 
+// Blame for the working-tree version of a file. Pass null to disable the
+// query entirely (blame is only fetched while the blame column is visible).
+export function useFileBlame(path: string | null) {
+  return useQuery({
+    queryKey: ['fileBlame', path],
+    queryFn: () => api.getFileBlame(path!),
+    enabled: !!path,
+    staleTime: 10000,
+  });
+}
+
 export function useFileDiff(
   path: string | null,
   ignoreWhitespace: boolean = false,

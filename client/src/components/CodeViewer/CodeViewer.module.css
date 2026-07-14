@@ -47,6 +47,103 @@
   user-select: none;
 }
 
+/* Git blame column (toggled with b) */
+.blameCell {
+  position: relative;
+  padding: 0 10px 0 8px;
+  text-align: left;
+  vertical-align: top;
+  user-select: none;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border-color);
+}
+
+.blameTinted {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.blameUncommitted {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+/* One label per hunk; sticks to the viewport top while its hunk scrolls past.
+   Fixed width (driven by the drag-resizable --blame-width) also sizes the column. */
+.blameLabel {
+  position: sticky;
+  top: 0;
+  width: calc(var(--blame-width, 170px) - 18px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blameTime {
+  opacity: 0.75;
+}
+
+.blameLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.blameLink:hover {
+  color: var(--text-accent);
+  text-decoration: none;
+}
+
+/* Drag handle to resize the blame column */
+.blameResizeHandle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+  transition: background 0.15s ease;
+}
+
+.blameResizeHandle:hover {
+  background: rgba(94, 234, 212, 0.4);
+}
+
+/* Custom hover tooltip for blame details */
+.blameTooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 380px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.blameTooltipAuthor {
+  font-weight: 600;
+}
+
+.blameTooltipMuted {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.blameTooltipCommit {
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+
+.blameTooltipSha {
+  font-family: var(--font-mono);
+  color: var(--text-accent);
+}
+
 .lineNumber {
   width: 50px;
   padding: 0 12px 0 8px;

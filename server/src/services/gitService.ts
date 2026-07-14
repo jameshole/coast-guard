@@ -1,11 +1,12 @@
 import { simpleGit, SimpleGit, StatusResult } from 'simple-git';
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { GitStatus, FileDiff, LineDiff, DiffStats } from '../types/index.js';
+import type { GitStatus, FileDiff, LineDiff, DiffStats, FileBlame, BlameHunk } from '../types/index.js';
 
 export class GitService {
   private git: SimpleGit;
   private projectPath: string;
+  private commitUrlBasePromise: Promise<string | null> | null = null;
 
   constructor(projectPath: string) {
     this.projectPath = projectPath;
@@ -278,5 +279,104 @@ export class GitService {
     }
 
     return fileMap;
+  }
+
+  async getFileBlame(filePath: string): Promise<FileBlame> {
+    let hunks: BlameHunk[] = [];
+    try {
+      const raw = await this.git.raw(['blame', '--porcelain', '--', filePath]);
+      hunks = this.parseBlamePorcelain(raw);
+    } catch {
+      // untracked file, binary file, or not a repo — no blame available
+    }
+    return { hunks, commitUrlBase: await this.getCommitUrlBase() };
+  }
+
+  // Base URL for linking to commits (e.g. https://github.com/owner/repo/commit),
+  // derived from the origin remote. Cached for the lifetime of the server since
+  // remotes effectively never change while browsing.
+  private getCommitUrlBase(): Promise<string | null> {
+    if (!this.commitUrlBasePromise) {
+      this.commitUrlBasePromise = (async () => {
+        try {
+          const url = (await this.git.raw(['remote', 'get-url', 'origin'])).trim();
+          // Handles git@github.com:owner/repo.git, ssh://git@github.com/owner/repo.git,
+          // and https://github.com/owner/repo(.git)
+          const match = url.match(/github\.com[:/](.+?)(?:\.git)?\/?$/);
+          return match ? `https://github.com/${match[1]}/commit` : null;
+        } catch {
+          return null;
+        }
+      })();
+    }
+    return this.commitUrlBasePromise;
+  }
+
+  private parseBlamePorcelain(output: string): BlameHunk[] {
+    interface CommitMeta {
+      author: string;
+      authorTime: number;
+      summary: string;
+    }
+
+    const metas = new Map<string, CommitMeta>();
+    const groups: Array<{ sha: string; startLine: number; lineCount: number }> = [];
+    let currentSha: string | null = null;
+
+    for (const line of output.split('\n')) {
+      // File content lines are tab-prefixed
+      if (line.startsWith('\t')) continue;
+
+      // Group header: <sha> <orig-line> <final-line> [<lines-in-group>]
+      // The 4th field only appears on the first line of each group.
+      const groupMatch = line.match(/^([0-9a-f]{40}) \d+ (\d+)(?: (\d+))?$/);
+      if (groupMatch) {
+        currentSha = groupMatch[1];
+        if (groupMatch[3]) {
+          groups.push({
+            sha: currentSha,
+            startLine: parseInt(groupMatch[2], 10),
+            lineCount: parseInt(groupMatch[3], 10),
+          });
+        }
+        if (!metas.has(currentSha)) {
+          metas.set(currentSha, { author: '', authorTime: 0, summary: '' });
+        }
+        continue;
+      }
+
+      // Commit metadata lines follow the first group header for each commit
+      if (!currentSha) continue;
+      const meta = metas.get(currentSha)!;
+      if (line.startsWith('author ')) meta.author = line.substring(7);
+      else if (line.startsWith('author-time ')) meta.authorTime = parseInt(line.substring(12), 10);
+      else if (line.startsWith('summary ')) meta.summary = line.substring(8);
+    }
+
+    // Merge adjacent groups from the same commit so the UI annotates each
+    // contiguous block once.
+    const hunks: BlameHunk[] = [];
+    groups.sort((a, b) => a.startLine - b.startLine);
+    for (const group of groups) {
+      const last = hunks[hunks.length - 1];
+      if (last && last.sha === group.sha && last.startLine + last.lineCount === group.startLine) {
+        last.lineCount += group.lineCount;
+        continue;
+      }
+      const meta = metas.get(group.sha)!;
+      const isUncommitted = /^0+$/.test(group.sha);
+      hunks.push({
+        sha: group.sha,
+        shortSha: group.sha.substring(0, 7),
+        author: isUncommitted ? 'Uncommitted' : meta.author,
+        authorTime: meta.authorTime,
+        summary: meta.summary,
+        startLine: group.startLine,
+        lineCount: group.lineCount,
+        isUncommitted,
+      });
+    }
+
+    return hunks;
   }
 }
