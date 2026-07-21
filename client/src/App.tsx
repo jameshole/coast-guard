@@ -9,6 +9,7 @@ import { DefinitionPicker } from './components/DefinitionPicker';
 import { CommentPanel } from './components/CommentPanel';
 import type { Comment } from './components/CommentPanel';
 import { ClaudeView, ClaudeProvider } from './components/ClaudeView';
+import { OpencodeView, OpencodeProvider } from './components/OpencodeView';
 import { ScriptsProvider, ScriptsPanel } from './components/ScriptsPanel';
 import type { DefinitionResult } from './types';
 import { api } from './services/api';
@@ -64,7 +65,7 @@ function AppContent() {
   const [isDefinitionPickerOpen, setIsDefinitionPickerOpen] = useState(false);
   const [isDefinitionLoading, setIsDefinitionLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [mainView, setMainView] = useState<'editor' | 'claude'>('editor');
+  const [mainView, setMainView] = useState<'editor' | 'claude' | 'opencode'>('editor');
   const { data: projectInfo } = useProjectInfo();
 
   // Connect to file watcher for live updates
@@ -155,7 +156,7 @@ function AppContent() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
         e.preventDefault();
-        setMainView((v) => (v === 'editor' ? 'claude' : 'editor'));
+        setMainView((v) => v === 'editor' ? 'claude' : v === 'claude' ? 'opencode' : 'editor');
       }
     };
 
@@ -235,6 +236,9 @@ function AppContent() {
     if (mainView === 'claude') {
       return <ClaudeView />;
     }
+    if (mainView === 'opencode') {
+      return <OpencodeView />;
+    }
 
     if (!selectedFile) {
       return <CodeViewer filePath={null} />;
@@ -299,6 +303,7 @@ function AppContent() {
   return (
     <ScriptsProvider>
     <ClaudeProvider isActive={mainView === 'claude'} onOpenFileRef={handleOpenFileRef}>
+    <OpencodeProvider isActive={mainView === 'opencode'} onOpenFileRef={handleOpenFileRef}>
       <Layout
         sidebar={
           <Sidebar
@@ -331,7 +336,8 @@ function AppContent() {
         markdownCodeView={markdownCodeView}
         onToggleMarkdownCodeView={() => setMarkdownCodeView(prev => !prev)}
         mainView={mainView}
-        onToggleMainView={() => setMainView(v => v === 'editor' ? 'claude' : 'editor')}
+        onSetMainView={setMainView}
+        onToggleMainView={() => setMainView(v => v === 'editor' ? 'claude' : v === 'claude' ? 'opencode' : 'editor')}
       />
       <CommandPalette
         isOpen={isCommandPaletteOpen}
@@ -347,6 +353,7 @@ function AppContent() {
       />
       {isDefinitionLoading && <LoadingBar />}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+    </OpencodeProvider>
     </ClaudeProvider>
     </ScriptsProvider>
   );

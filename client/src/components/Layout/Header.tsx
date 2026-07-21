@@ -3,6 +3,7 @@ import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Co
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import { useClaude } from '../ClaudeView';
+import { useOpencode } from '../OpencodeView';
 import { isTypingTarget } from '../../utils/keyboard';
 import styles from './Header.module.css';
 
@@ -19,15 +20,17 @@ interface HeaderProps {
   onToggleBlame: () => void;
   markdownCodeView: boolean;
   onToggleMarkdownCodeView: () => void;
-  mainView: 'editor' | 'claude';
+  mainView: 'editor' | 'claude' | 'opencode';
+  onSetMainView: (view: 'editor' | 'claude' | 'opencode') => void;
   onToggleMainView: () => void;
 }
 
-export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, showBlame, onToggleBlame, markdownCodeView, onToggleMarkdownCodeView, mainView, onToggleMainView }: HeaderProps) {
+export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, showBlame, onToggleBlame, markdownCodeView, onToggleMarkdownCodeView, mainView, onSetMainView }: HeaderProps) {
   const { data: projectInfo } = useProjectInfo();
   const { data: gitCheck } = useGitCheck();
   const { data: gitBranch } = useGitBranch();
   const { unread: claudeUnread, isStreaming: claudeStreaming } = useClaude();
+  const { unread: opencodeUnread, isStreaming: opencodeStreaming } = useOpencode();
   const [diffCount, setDiffCount] = useState(0);
   const [currentDiffIndex, setCurrentDiffIndex] = useState(-1);
   const lastFileRef = useRef<string | null>(null);
@@ -198,7 +201,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
       <div className={styles.viewToggle}>
         <button
           className={`${styles.viewToggleButton} ${mainView === 'editor' ? styles.viewToggleButtonActive : ''}`}
-          onClick={() => mainView !== 'editor' && onToggleMainView()}
+          onClick={() => onSetMainView('editor')}
           title="Editor (Cmd/Ctrl+J to toggle)"
         >
           <FileText size={14} />
@@ -206,7 +209,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
         </button>
         <button
           className={`${styles.viewToggleButton} ${mainView === 'claude' ? styles.viewToggleButtonActive : ''}`}
-          onClick={() => mainView !== 'claude' && onToggleMainView()}
+          onClick={() => onSetMainView('claude')}
           title="Claude (Cmd/Ctrl+J to toggle)"
         >
           <MessageSquare size={14} />
@@ -215,6 +218,20 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
             <span className={styles.viewToggleStreamDot} title="Claude is responding…" />
           )}
           {claudeUnread && mainView !== 'claude' && !claudeStreaming && (
+            <span className={styles.viewToggleBadgeDot} title="New response" />
+          )}
+        </button>
+        <button
+          className={`${styles.viewToggleButton} ${mainView === 'opencode' ? styles.viewToggleButtonActive : ''}`}
+          onClick={() => onSetMainView('opencode')}
+          title="Opencode (Cmd/Ctrl+J to toggle)"
+        >
+          <MessageSquare size={14} />
+          <span>Opencode</span>
+          {opencodeStreaming && mainView !== 'opencode' && (
+            <span className={styles.viewToggleStreamDot} title="Opencode is responding…" />
+          )}
+          {opencodeUnread && mainView !== 'opencode' && !opencodeStreaming && (
             <span className={styles.viewToggleBadgeDot} title="New response" />
           )}
         </button>

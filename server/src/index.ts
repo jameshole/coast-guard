@@ -11,6 +11,7 @@ import { WatchService, FileChangeEvent } from './services/watchService.js';
 import { createFilesRouter } from './routes/files.js';
 import { createGitRouter } from './routes/git.js';
 import { createClaudeRouter } from './routes/claude.js';
+import { createOpencodeRouter } from './routes/opencode.js';
 import { createScriptsRouter } from './routes/scripts.js';
 import { ScriptRunner, RunState, ScriptOutputEvent } from './services/scriptRunner.js';
 import type { ServerConfig } from './types/index.js';
@@ -39,6 +40,7 @@ export function createServer(config: ServerConfig): CreateServerResult {
   app.use('/api/files', createFilesRouter(fileService, tsService));
   app.use('/api/git', createGitRouter(gitService));
   app.use('/api/claude', createClaudeRouter(config.projectPath));
+  app.use('/api/opencode', createOpencodeRouter(config.projectPath));
   app.use('/api/scripts', createScriptsRouter(scriptRunner));
 
   // Project info endpoint
