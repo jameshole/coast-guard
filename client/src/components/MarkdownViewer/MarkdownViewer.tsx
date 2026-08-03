@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Copy, Check } from 'lucide-react';
 import { createHighlighter, type Highlighter } from 'shiki';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFileContent } from '../../hooks/useFileContent';
@@ -52,6 +53,46 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/** Copies a code block's raw text (no line numbers) to the clipboard */
+function CopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current) window.clearTimeout(resetTimer.current);
+    };
+  }, []);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      if (resetTimer.current) window.clearTimeout(resetTimer.current);
+      resetTimer.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('Failed to copy code block:', err);
+    }
+  };
+
+  return (
+    <button
+      className={styles.copyButton}
+      // Don't let the click bubble into the selectable-block line selection
+      onClick={(e) => {
+        e.stopPropagation();
+        handleCopy();
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      title={copied ? 'Copied' : 'Copy code'}
+      aria-label="Copy code"
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+      <span>{copied ? 'Copied' : 'Copy'}</span>
+    </button>
+  );
 }
 
 interface SelectableCodeBlockProps {
@@ -128,46 +169,49 @@ function SelectableCodeBlock({
   const lines = highlightedLines.length > 0 ? highlightedLines : codeLines.map(escapeHtml);
 
   return (
-    <div className={styles.codeBlock}>
-      <table className={styles.codeTable}>
-        <tbody>
-          {lines.map((html, i) => {
-            const sourceLine = codeStartLine + i;
-            const isSelected =
-              activeSelection &&
-              sourceLine >= activeSelection.startLine &&
-              sourceLine <= activeSelection.endLine;
-            const hasComment = commentedLines?.has(sourceLine);
+    <div className={styles.codeBlockWrapper}>
+      <CopyButton code={code} />
+      <div className={styles.codeBlock}>
+        <table className={styles.codeTable}>
+          <tbody>
+            {lines.map((html, i) => {
+              const sourceLine = codeStartLine + i;
+              const isSelected =
+                activeSelection &&
+                sourceLine >= activeSelection.startLine &&
+                sourceLine <= activeSelection.endLine;
+              const hasComment = commentedLines?.has(sourceLine);
 
-            return (
-              <tr
-                key={i}
-                className={`${styles.codeLine} ${isSelected ? styles.selectedCodeLine : ''} ${hasComment ? styles.commentedCodeLine : ''}`}
-              >
-                <td
-                  className={styles.codeLineNumber}
-                  onMouseDown={(e) => {
-                    if (e.button !== 0) return;
-                    e.preventDefault();
-                    setSelectionAnchor(sourceLine);
-                    setSelectionEnd(sourceLine);
-                    isDragging.current = true;
-                  }}
-                  onMouseEnter={() => {
-                    if (isDragging.current) setSelectionEnd(sourceLine);
-                  }}
+              return (
+                <tr
+                  key={i}
+                  className={`${styles.codeLine} ${isSelected ? styles.selectedCodeLine : ''} ${hasComment ? styles.commentedCodeLine : ''}`}
                 >
-                  {sourceLine}
-                </td>
-                <td
-                  className={styles.codeLineContent}
-                  dangerouslySetInnerHTML={{ __html: html || '&nbsp;' }}
-                />
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  <td
+                    className={styles.codeLineNumber}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.preventDefault();
+                      setSelectionAnchor(sourceLine);
+                      setSelectionEnd(sourceLine);
+                      isDragging.current = true;
+                    }}
+                    onMouseEnter={() => {
+                      if (isDragging.current) setSelectionEnd(sourceLine);
+                    }}
+                  >
+                    {sourceLine}
+                  </td>
+                  <td
+                    className={styles.codeLineContent}
+                    dangerouslySetInnerHTML={{ __html: html || '&nbsp;' }}
+                  />
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

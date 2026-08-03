@@ -96,8 +96,43 @@
   border-radius: 4px;
 }
 
-.codeBlock {
+/* Wrapper exists so the copy button can sit still while the code scrolls under it */
+.codeBlockWrapper {
+  position: relative;
   margin: 16px 0;
+}
+
+.copyButton {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-sans, inherit);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.codeBlockWrapper:hover .copyButton,
+.copyButton:focus-visible {
+  opacity: 1;
+}
+
+.copyButton:hover {
+  color: var(--text-primary);
+}
+
+.codeBlock {
   padding: 4px 0;
   overflow-x: auto;
   font-size: 13px;
