@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, Code, FileText, MessageSquare, History } from 'lucide-react';
+import { GitBranch, Folder, ChevronUp, ChevronDown, Space, ExternalLink, Eye, EyeOff, Code, FileText, MessageSquare, History } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
 import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
+import { useGitWatchEnabled, useToggleGitWatch } from '../../hooks/useSettings';
 import { useClaude } from '../ClaudeView';
 import { isTypingTarget } from '../../utils/keyboard';
 import styles from './Header.module.css';
@@ -27,6 +28,8 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
   const { data: projectInfo } = useProjectInfo();
   const { data: gitCheck } = useGitCheck();
   const { data: gitBranch } = useGitBranch();
+  const gitWatchEnabled = useGitWatchEnabled();
+  const toggleGitWatch = useToggleGitWatch();
   const { unread: claudeUnread, isStreaming: claudeStreaming } = useClaude();
   const [diffCount, setDiffCount] = useState(0);
   const [currentDiffIndex, setCurrentDiffIndex] = useState(-1);
@@ -221,10 +224,20 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
       </div>
 
       {gitCheck?.isGitRepo && gitBranch?.branch && (
-        <div className={styles.gitInfo}>
+        <button
+          className={`${styles.gitInfo} ${styles.gitInfoButton} ${gitWatchEnabled ? '' : styles.gitWatchOff}`}
+          onClick={() => toggleGitWatch.mutate(!gitWatchEnabled)}
+          disabled={toggleGitWatch.isPending}
+          title={
+            gitWatchEnabled
+              ? 'Git watching on — click to stop polling for git changes'
+              : 'Git watching off — click to resume polling for git changes'
+          }
+        >
           <GitBranch size={14} className={styles.icon} />
           <span className={styles.branchName}>{gitBranch.branch}</span>
-        </div>
+          {gitWatchEnabled ? <Eye size={13} className={styles.icon} /> : <EyeOff size={13} className={styles.icon} />}
+        </button>
       )}
     </header>
   );

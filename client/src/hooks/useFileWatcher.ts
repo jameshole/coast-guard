@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface FileChangeEvent {
-  type: 'change' | 'gitStatus' | 'connected' | 'shutdown';
+  type: 'change' | 'gitStatus' | 'connected' | 'shutdown' | 'settings';
   path?: string;
   changedFiles?: string[];
+  gitWatchEnabled?: boolean;
 }
 
 export function useFileWatcher(currentFile: string | null): { connected: boolean } {
@@ -40,6 +41,14 @@ export function useFileWatcher(currentFile: string | null): { connected: boolean
           const data: FileChangeEvent = JSON.parse(event.data);
 
           if (data.type === 'connected') {
+            return;
+          }
+
+          if (data.type === 'settings') {
+            // Another tab toggled a server-wide setting (e.g. git watching)
+            if (typeof data.gitWatchEnabled === 'boolean') {
+              queryClient.setQueryData(['settings'], { gitWatchEnabled: data.gitWatchEnabled });
+            }
             return;
           }
 

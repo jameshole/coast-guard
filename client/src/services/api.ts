@@ -37,6 +37,12 @@ export const api = {
 
   getAllFiles: (): Promise<string[]> => fetchJSON('/files/all'),
 
+  // Settings
+  getSettings: (): Promise<{ gitWatchEnabled: boolean }> => fetchJSON('/settings'),
+
+  setGitWatchEnabled: (enabled: boolean): Promise<{ gitWatchEnabled: boolean }> =>
+    putJSON('/settings/git-watch', { enabled }),
+
   // Git
   checkGitRepo: (): Promise<{ isGitRepo: boolean }> => fetchJSON('/git/check'),
 

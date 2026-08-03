@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
+import { useGitWatchEnabled } from './useSettings';
 
 export function useGitCheck() {
   return useQuery({
@@ -26,29 +27,33 @@ export function useGitBranches() {
 }
 
 export function useGitStatus() {
+  const gitWatchEnabled = useGitWatchEnabled();
   return useQuery({
     queryKey: ['gitStatus'],
     queryFn: api.getGitStatus,
     staleTime: 10000, // 10 seconds - git status can change frequently
-    refetchInterval: 30000, // Auto-refresh every 30 seconds
+    // Auto-refresh every 30 seconds, unless git watching is turned off
+    refetchInterval: gitWatchEnabled ? 30000 : false,
   });
 }
 
 export function useChangedFiles(baseRef: string = 'HEAD') {
+  const gitWatchEnabled = useGitWatchEnabled();
   return useQuery({
     queryKey: ['changedFiles', baseRef],
     queryFn: () => api.getChangedFiles(baseRef),
     staleTime: 10000,
-    refetchInterval: 30000,
+    refetchInterval: gitWatchEnabled ? 30000 : false,
   });
 }
 
 export function useDiffStats(baseRef: string = 'HEAD') {
+  const gitWatchEnabled = useGitWatchEnabled();
   return useQuery({
     queryKey: ['diffStats', baseRef],
     queryFn: () => api.getDiffStats(baseRef),
     staleTime: 10000,
-    refetchInterval: 30000,
+    refetchInterval: gitWatchEnabled ? 30000 : false,
   });
 }
 

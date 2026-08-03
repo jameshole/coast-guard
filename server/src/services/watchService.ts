@@ -18,6 +18,7 @@ export class WatchService extends EventEmitter {
   private pollInterval: NodeJS.Timeout | null = null;
   private lastGitStatus: string | null = null; // Serialized status for comparison
   private debounceTimer: NodeJS.Timeout | null = null;
+  private gitPollingEnabled = true;
 
   constructor(rootDir: string) {
     super();
@@ -25,15 +26,45 @@ export class WatchService extends EventEmitter {
     this.git = simpleGit(rootDir);
   }
 
-  start(): void {
-    // Start git status polling
-    this.startGitPolling();
-    console.log('File watcher started (hybrid mode: git polling + single file watch)');
+  start(gitPollingEnabled: boolean = true): void {
+    this.gitPollingEnabled = gitPollingEnabled;
+    if (gitPollingEnabled) {
+      this.startGitPolling();
+    }
+    console.log(
+      `File watcher started (single file watch${gitPollingEnabled ? ' + git polling' : ', git polling disabled'})`,
+    );
+  }
+
+  isGitPollingEnabled(): boolean {
+    return this.gitPollingEnabled;
+  }
+
+  /**
+   * Turn git status polling on/off at runtime. Polling shells out to `git status`
+   * and stats every changed file every 2s, which is wasteful (and memory-hungry)
+   * in large or rarely-changing repos.
+   */
+  setGitPollingEnabled(enabled: boolean): void {
+    if (enabled === this.gitPollingEnabled) return;
+    this.gitPollingEnabled = enabled;
+
+    if (enabled) {
+      this.startGitPolling();
+    } else if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+      // Drop the baseline so re-enabling doesn't fire a stale change event
+      this.lastGitStatus = null;
+    }
   }
 
   private startGitPolling(): void {
+    if (this.pollInterval) return;
+
     // Poll git status every 2 seconds
     const poll = async () => {
+      if (!this.gitPollingEnabled) return;
       try {
         const status = await this.git.status();
         const changedFiles = this.getChangedFiles(status);
@@ -43,6 +74,9 @@ export class WatchService extends EventEmitter {
         const mtimes = await this.getFileMtimes(changedFiles);
 
         const statusKey = this.serializeGitStatus(status, mtimes);
+
+        // Polling may have been turned off while this pass was in flight
+        if (!this.gitPollingEnabled) return;
 
         if (this.lastGitStatus !== null && this.lastGitStatus !== statusKey) {
           // Status changed - emit event with changed files

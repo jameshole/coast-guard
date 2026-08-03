@@ -12,6 +12,8 @@ import { createFilesRouter } from './routes/files.js';
 import { createGitRouter } from './routes/git.js';
 import { createClaudeRouter } from './routes/claude.js';
 import { createScriptsRouter } from './routes/scripts.js';
+import { createSettingsRouter } from './routes/settings.js';
+import { SettingsStore } from './services/settingsStore.js';
 import { ScriptRunner, RunState, ScriptOutputEvent } from './services/scriptRunner.js';
 import type { ServerConfig } from './types/index.js';
 
@@ -20,6 +22,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 interface CreateServerResult {
   app: Express;
   scriptRunner: ScriptRunner;
+  watchService: WatchService;
+  settingsStore: SettingsStore;
+  /** Wired up once the WebSocket server exists, so settings changes can be pushed to clients */
+  setBroadcast: (fn: (payload: unknown) => void) => void;
 }
 
 export function createServer(config: ServerConfig): CreateServerResult {
@@ -30,6 +36,13 @@ export function createServer(config: ServerConfig): CreateServerResult {
   const gitService = new GitService(config.projectPath);
   const tsService = new TypeScriptService(config.projectPath);
   const scriptRunner = new ScriptRunner(config.projectPath);
+  const settingsStore = new SettingsStore(config.projectPath);
+  const watchService = new WatchService(config.projectPath);
+
+  let broadcast: ((payload: unknown) => void) | null = null;
+  const setBroadcast = (fn: (payload: unknown) => void) => {
+    broadcast = fn;
+  };
 
   // Middleware
   app.use(cors());
@@ -40,6 +53,12 @@ export function createServer(config: ServerConfig): CreateServerResult {
   app.use('/api/git', createGitRouter(gitService));
   app.use('/api/claude', createClaudeRouter(config.projectPath));
   app.use('/api/scripts', createScriptsRouter(scriptRunner));
+  app.use(
+    '/api/settings',
+    createSettingsRouter(settingsStore, watchService, (settings) =>
+      broadcast?.({ type: 'settings', ...settings }),
+    ),
+  );
 
   // Project info endpoint
   app.get('/api/project', (_req, res) => {
@@ -67,7 +86,7 @@ export function createServer(config: ServerConfig): CreateServerResult {
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 
-  return { app, scriptRunner };
+  return { app, scriptRunner, watchService, settingsStore, setBroadcast };
 }
 
 interface StartServerResult {
@@ -79,7 +98,7 @@ interface StartServerResult {
 }
 
 export async function startServer(config: ServerConfig): Promise<StartServerResult> {
-  const { app, scriptRunner } = createServer(config);
+  const { app, scriptRunner, watchService, settingsStore, setBroadcast } = createServer(config);
   const httpServer = createHttpServer(app);
 
   // Find an available port first
@@ -110,21 +129,6 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
   // Create WebSocket server after port is successfully bound
   const wss = new WebSocketServer({ server: httpServer });
 
-  // Create and start file watcher
-  const watchService = new WatchService(config.projectPath);
-  watchService.start();
-
-  // Broadcast file changes to all connected clients
-  watchService.on('change', (event: FileChangeEvent) => {
-    const message = JSON.stringify(event);
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
-    });
-  });
-
-  // Broadcast script-run events to all connected clients
   const broadcast = (payload: unknown) => {
     const msg = JSON.stringify(payload);
     wss.clients.forEach((client) => {
@@ -133,6 +137,15 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
       }
     });
   };
+  setBroadcast(broadcast);
+
+  // Start the file watcher, honouring the persisted git-watch preference
+  watchService.start(settingsStore.get().gitWatchEnabled);
+
+  // Broadcast file changes to all connected clients
+  watchService.on('change', (event: FileChangeEvent) => {
+    broadcast(event);
+  });
   scriptRunner.on('update', (state: RunState) => {
     broadcast({ type: 'scriptUpdate', state });
   });
