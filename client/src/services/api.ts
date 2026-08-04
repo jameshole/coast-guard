@@ -1,4 +1,4 @@
-import type { FileNode, GitStatus, FileDiff, ProjectInfo, GitFileStatus, DefinitionResult, DiffStats, FileBlame } from '../types';
+import type { FileNode, GitStatus, FileDiff, ProjectInfo, GitFileStatus, DefinitionResult, DiffStats, FileBlame, SearchResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -36,6 +36,11 @@ export const api = {
     fetchJSON(`/files/content?path=${encodeURIComponent(path)}`),
 
   getAllFiles: (): Promise<string[]> => fetchJSON('/files/all'),
+
+  searchFiles: (query: string, regex: boolean, caseSensitive: boolean): Promise<SearchResponse> =>
+    fetchJSON(
+      `/files/search?q=${encodeURIComponent(query)}&regex=${regex}&caseSensitive=${caseSensitive}`,
+    ),
 
   // Settings
   getSettings: (): Promise<{ gitWatchEnabled: boolean }> => fetchJSON('/settings'),

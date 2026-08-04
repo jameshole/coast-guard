@@ -48,6 +48,27 @@ export function createFilesRouter(fileService: FileService, tsService: TypeScrip
     }
   });
 
+  // Search file contents across the project
+  router.get('/search', async (req: Request, res: Response) => {
+    try {
+      const query = req.query.q as string;
+
+      if (!query) {
+        res.status(400).json({ error: 'Query is required' });
+        return;
+      }
+
+      const results = await fileService.search(query, {
+        regex: req.query.regex === 'true',
+        caseSensitive: req.query.caseSensitive === 'true',
+      });
+      res.json(results);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(400).json({ error: message });
+    }
+  });
+
   // Go to definition using TypeScript language service
   router.get('/definitions', (req: Request, res: Response) => {
     try {

@@ -65,3 +65,21 @@ export interface FileBlame {
   hunks: BlameHunk[];
   commitUrlBase: string | null;
 }
+
+export interface SearchMatch {
+  line: number;
+  before: string;
+  match: string;
+  after: string;
+}
+
+export interface SearchFileResult {
+  path: string;
+  matches: SearchMatch[];
+}
+
+export interface SearchResponse {
+  results: SearchFileResult[];
+  totalMatches: number;
+  truncated: boolean;
+}

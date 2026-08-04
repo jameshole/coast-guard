@@ -61,6 +61,24 @@ export interface DefinitionResult {
   context: string;
 }
 
+export interface SearchMatch {
+  line: number;
+  before: string;
+  match: string;
+  after: string;
+}
+
+export interface SearchFileResult {
+  path: string;
+  matches: SearchMatch[];
+}
+
+export interface SearchResponse {
+  results: SearchFileResult[];
+  totalMatches: number;
+  truncated: boolean;
+}
+
 export interface ServerConfig {
   projectPath: string;
   port: number;

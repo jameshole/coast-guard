@@ -303,6 +303,7 @@ function AppContent() {
         sidebar={
           <Sidebar
             onFileSelect={handleFileSelect}
+            onOpenAtLine={handleOpenFileRef}
             selectedFile={selectedFile}
             commentCount={comments.length}
             pendingSelection={pendingSelection}

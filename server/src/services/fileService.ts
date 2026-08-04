@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { simpleGit, SimpleGit } from 'simple-git';
-import type { FileNode } from '../types/index.js';
+import type { FileNode, SearchFileResult, SearchMatch, SearchResponse } from '../types/index.js';
 
 // Files/directories to ignore
 const IGNORED_PATTERNS = [
@@ -188,6 +188,93 @@ export class FileService {
     return this.scanDirectory(relativePath);
   }
 
+  async search(
+    query: string,
+    options: { regex?: boolean; caseSensitive?: boolean } = {},
+  ): Promise<SearchResponse> {
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // skip files over 2MB
+    const MAX_TOTAL_MATCHES = 2000;
+    const MAX_MATCHES_PER_FILE = 200;
+    const BATCH_SIZE = 16;
+
+    const flags = options.caseSensitive ? 'g' : 'gi';
+    let pattern: RegExp;
+    if (options.regex) {
+      try {
+        pattern = new RegExp(query, flags);
+      } catch {
+        throw new Error('Invalid regular expression');
+      }
+    } else {
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      pattern = new RegExp(escaped, flags);
+    }
+
+    const files = await this.getAllFiles();
+    const results: SearchFileResult[] = [];
+    let totalMatches = 0;
+    let truncated = false;
+
+    for (let i = 0; i < files.length && !truncated; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map((file) => this.searchFile(file, pattern, MAX_FILE_SIZE, MAX_MATCHES_PER_FILE)),
+      );
+
+      for (const result of batchResults) {
+        if (!result) continue;
+        if (totalMatches + result.matches.length > MAX_TOTAL_MATCHES) {
+          result.matches = result.matches.slice(0, MAX_TOTAL_MATCHES - totalMatches);
+          truncated = true;
+        }
+        if (result.matches.length > 0) {
+          results.push(result);
+          totalMatches += result.matches.length;
+        }
+      }
+    }
+
+    return { results, totalMatches, truncated };
+  }
+
+  private async searchFile(
+    relativePath: string,
+    pattern: RegExp,
+    maxSize: number,
+    maxMatches: number,
+  ): Promise<SearchFileResult | null> {
+    let content: string;
+    try {
+      const absolutePath = this.validatePath(relativePath);
+      const stats = await fs.stat(absolutePath);
+      if (!stats.isFile() || stats.size > maxSize) return null;
+      content = await fs.readFile(absolutePath, 'utf-8');
+    } catch {
+      // Unreadable or deleted-but-still-listed files are silently skipped
+      return null;
+    }
+
+    // Skip binary files (NUL byte heuristic)
+    if (content.includes('\u0000')) return null;
+
+    const matches: SearchMatch[] = [];
+    const lines = content.split('\n');
+
+    for (let lineIndex = 0; lineIndex < lines.length && matches.length < maxMatches; lineIndex++) {
+      const line = lines[lineIndex];
+      pattern.lastIndex = 0;
+      let m: RegExpExecArray | null;
+
+      while ((m = pattern.exec(line)) !== null && matches.length < maxMatches) {
+        matches.push(buildMatch(line, lineIndex + 1, m.index, m[0].length));
+        // Zero-length matches (e.g. regex `a*`) would loop forever otherwise
+        if (m[0].length === 0) pattern.lastIndex++;
+      }
+    }
+
+    return { path: relativePath, matches };
+  }
+
   private async scanDirectory(relativePath: string = ''): Promise<string[]> {
     const absolutePath = this.validatePath(relativePath);
     const files: string[] = [];
@@ -216,4 +303,23 @@ export class FileService {
     await scan(absolutePath, relativePath);
     return files;
   }
+}
+
+// Window the line around a match so previews stay small even on minified lines
+function buildMatch(line: string, lineNumber: number, index: number, length: number): SearchMatch {
+  const BEFORE_CHARS = 80;
+  const AFTER_CHARS = 120;
+  const MAX_MATCH_CHARS = 200;
+
+  let before = line.slice(Math.max(0, index - BEFORE_CHARS), index);
+  if (index > BEFORE_CHARS) before = '…' + before;
+
+  let match = line.slice(index, index + length);
+  if (match.length > MAX_MATCH_CHARS) match = match.slice(0, MAX_MATCH_CHARS) + '…';
+
+  const afterStart = index + length;
+  let after = line.slice(afterStart, afterStart + AFTER_CHARS);
+  if (line.length > afterStart + AFTER_CHARS) after = after + '…';
+
+  return { line: lineNumber, before, match, after };
 }
