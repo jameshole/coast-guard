@@ -1,6 +1,6 @@
 # 🏖️ Coast Guard
 
-A lightweight, browser-based code viewer for reading code and reviewing local git changes. Point it at any project directory and it serves a fast, keyboard-driven UI with a file explorer, syntax highlighting, git diff visualization, markdown rendering, inline review comments, an npm script runner, and an optional embedded Claude chat.
+A lightweight, browser-based code viewer for reading code and reviewing local git changes. Point it at any project directory and it serves a fast, keyboard-driven UI with a file explorer, syntax highlighting, git diff visualization, markdown rendering, inline review comments, an npm script runner, and optional embedded Claude + Opencode chats.
 
 It runs entirely on your machine — a small Express server reads your local filesystem and git repo, and a React single-page app renders it in the browser.
 
@@ -19,6 +19,7 @@ It runs entirely on your machine — a small Express server reads your local fil
 - **Scripts panel** — run the `npm` scripts defined in the project's `package.json` from the UI, with live streaming output, stop control, and pinning.
 - **Live file watching** — the UI updates over a WebSocket as files change on disk.
 - **Embedded Claude chat** — an optional in-browser chat backed by the local `claude` CLI. **Please read the [usage & billing note](#-embedded-claude-chat--usage--billing) before relying on it.**
+- **Embedded Opencode chat** — an optional in-browser chat backed by the local [`opencode`](https://opencode.ai) CLI. Uses your own API keys with no separate credit pool. [Learn more](#-embedded-opencode-chat).
 
 ## Screenshots
 
@@ -32,6 +33,7 @@ It runs entirely on your machine — a small Express server reads your local fil
 - **npm** (the repo is an npm workspaces monorepo)
 - **git** on your `PATH` (the source-control features shell out to git)
 - The **[`claude` CLI](https://docs.claude.com/en/docs/claude-code/overview)** — only required if you use the embedded Claude chat
+- The **[`opencode` CLI](https://opencode.ai/docs/cli/)** — only required if you use the embedded Opencode chat
 
 ## Installation
 
@@ -83,7 +85,7 @@ npm run dev
 | Shortcut | Action |
 | --- | --- |
 | `Cmd/Ctrl + K` | Open the command palette (fuzzy file search) |
-| `Cmd/Ctrl + J` | Toggle between the Editor and Claude views |
+| `Cmd/Ctrl + J` | Cycle between Editor, Claude, and Opencode views |
 | `Ctrl + 1` / `2` / `3` / `4` | Switch sidebar tab: Explorer / Source Control / Comments / Scripts |
 | `Ctrl + 0` | Collapse / expand the sidebar |
 | `z` / `x` | Previous / next changed file (in the Source Control view) |
@@ -128,15 +130,46 @@ You can point Coast Guard at a specific CLI binary with the `CLAUDE_BIN` environ
 CLAUDE_BIN=/usr/local/bin/claude coast-guard .
 ```
 
+## 🤖 Embedded Opencode chat
+
+The embedded opencode chat works by shelling out to the local `opencode` CLI in headless mode (`opencode run --format json`). Unlike Claude, opencode uses your own API keys (configured via `opencode auth login`), so there are no separate credit pools or subscription tiers to worry about — you're billed at standard API rates by your chosen provider.
+
+### Setup
+
+```bash
+# Install opencode (if not already installed)
+curl -fsSL https://opencode.ai/install.sh | sh
+
+# Add a provider (interactive)
+opencode auth login
+
+# Or set an environment variable directly
+export ANTHROPIC_API_KEY=your-key-here
+```
+
+### Usage
+
+Click the **Opencode** button in the header (or press `Cmd/Ctrl+J` to cycle through views). The chat works the same as the Claude view — type a message and press Enter.
+
+### Security note
+
+The chat invokes the CLI with `--auto`, so opencode runs with all tool permissions auto-approved (it can read, edit, and run commands in the served project without prompting). Only use it on projects you trust.
+
+You can point Coast Guard at a specific CLI binary with the `OPENCODE_BIN` environment variable (defaults to `opencode` on your `PATH`):
+
+```bash
+OPENCODE_BIN=/usr/local/bin/opencode coast-guard .
+```
+
 ## Architecture
 
 ```
 coast-guard/
 ├── bin/coast-guard.js   # CLI entry (commander) — resolves the path, starts the server, opens the browser
-├── server/              # Express + ws server: filesystem, git, scripts, and Claude routes
-│   └── src/routes/      # git.ts, files.ts, scripts.ts, claude.ts
+├── server/              # Express + ws server: filesystem, git, scripts, Claude, and Opencode routes
+│   └── src/routes/      # git.ts, files.ts, scripts.ts, claude.ts, opencode.ts
 └── client/              # React + Vite single-page app
-    └── src/components/  # FileTree, CodeViewer, GitChangedFiles, ClaudeView, ScriptsPanel, …
+    └── src/components/  # FileTree, CodeViewer, GitChangedFiles, ClaudeView, OpencodeView, ScriptsPanel, …
 ```
 
 - **Server:** Node.js (ESM), Express, `ws` for the file-watching/script-output WebSocket, [`simple-git`](https://github.com/steveukx/git-js) + [`parse-git-diff`](https://github.com/JordanFinners/parse-git-diff) for git, [`chokidar`](https://github.com/paulmillr/chokidar) for watching, and the TypeScript compiler API for go-to-definition.

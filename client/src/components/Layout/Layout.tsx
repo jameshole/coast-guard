@@ -12,11 +12,12 @@ interface LayoutProps {
   onToggleBlame: () => void;
   markdownCodeView: boolean;
   onToggleMarkdownCodeView: () => void;
-  mainView: 'editor' | 'claude';
+  mainView: 'editor' | 'claude' | 'opencode';
+  onSetMainView: (view: 'editor' | 'claude' | 'opencode') => void;
   onToggleMainView: () => void;
 }
 
-export function Layout({ sidebar, main, currentFile, ignoreWhitespace, onToggleWhitespace, showBlame, onToggleBlame, markdownCodeView, onToggleMarkdownCodeView, mainView, onToggleMainView }: LayoutProps) {
+export function Layout({ sidebar, main, currentFile, ignoreWhitespace, onToggleWhitespace, showBlame, onToggleBlame, markdownCodeView, onToggleMarkdownCodeView, mainView, onSetMainView, onToggleMainView }: LayoutProps) {
   return (
     <div className={styles.layout}>
       <Header
@@ -28,6 +29,7 @@ export function Layout({ sidebar, main, currentFile, ignoreWhitespace, onToggleW
         markdownCodeView={markdownCodeView}
         onToggleMarkdownCodeView={onToggleMarkdownCodeView}
         mainView={mainView}
+        onSetMainView={onSetMainView}
         onToggleMainView={onToggleMainView}
       />
       <div className={styles.content}>

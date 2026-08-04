@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, RotateCcw, MessageSquare, Wrench } from 'lucide-react';
+import { Send, Square, RotateCcw, Wrench } from 'lucide-react';
 import { useClaude } from './ClaudeContext';
 import { buildTurnBubbles } from './buildBubbles';
 import type { AssistantBubble, SystemNoteEvent } from './buildBubbles';
@@ -312,7 +312,7 @@ export function ClaudeView() {
           <div className={styles.scroll} ref={scrollRef} onScroll={handleScroll}>
             {renderItems.length === 0 && !isStreaming ? (
               <div className={styles.empty}>
-                <MessageSquare size={28} className={styles.emptyIcon} strokeWidth={1.4} />
+                <img src="/images/claude.png" alt="" className={styles.emptyIcon} style={{ width: 178 }} />
                 <div className={styles.emptyTitle}>empty conversation</div>
                 <div className={styles.emptyHint}>send a message to start</div>
                 <div className={styles.emptyMeta}>cwd: {thread.cwd}</div>
