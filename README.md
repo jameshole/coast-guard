@@ -1,6 +1,6 @@
 # 🏖️ Coast Guard
 
-A lightweight, browser-based code viewer for reading code and reviewing local git changes. Point it at any project directory and it serves a fast, keyboard-driven UI with a file explorer, syntax highlighting, git diff visualization, markdown rendering, inline review comments, an npm script runner, and an optional embedded Claude chat.
+A lightweight, browser-based code viewer for reading code and reviewing local git changes. Point it at any project directory and it serves a fast, keyboard-driven UI with a file explorer, full-text search, syntax highlighting, git diff visualization, git blame, markdown rendering, inline review comments, an npm script runner, and an optional embedded Claude chat.
 
 It runs entirely on your machine — a small Express server reads your local filesystem and git repo, and a React single-page app renders it in the browser.
 
@@ -8,23 +8,29 @@ It runs entirely on your machine — a small Express server reads your local fil
 
 ## Features
 
-- **File explorer** — browse the project tree; open any file with syntax highlighting (powered by [Shiki](https://shiki.style/), GitHub Dark theme, 20+ languages).
+- **File explorer** — browse the project tree (including dot-prefixed files and directories); open any file with syntax highlighting (powered by [Shiki](https://shiki.style/), GitHub Dark theme, 20+ languages).
+- **Full-text search** — find a string or regex across every file in the project (`Cmd/Ctrl+Shift+F`), with case-sensitivity and regex toggles; results are grouped by file and click through to the matching line. Hidden/dot files are included; `.gitignore`d files are not.
 - **Source control view** — see modified, staged, and untracked files grouped by status, with aggregate diff stats.
 - **Git diff visualization** — inline additions/deletions rendered in the code viewer, with whitespace-ignoring toggle and hunk-to-hunk navigation.
+- **Git blame** — a toggleable blame column (`b`) with sticky hunk labels, commit tooltips on hover, drag-to-resize, and links to the commit on GitHub.
 - **Diff base picker** — diff the working tree against `HEAD`, a branch's merge base, another branch, or any custom ref (e.g. `HEAD~3`, `origin/main`).
-- **Markdown rendering** — GitHub-flavored markdown with a rendered/raw toggle; checkboxes are clickable and write back to the file.
+- **Markdown rendering** — GitHub-flavored markdown with a rendered/raw toggle; checkboxes are clickable and write back to the file, and rendered code blocks have a copy button.
 - **Review comments** — drag across line numbers to select a range and attach inline comments; copy them all out or hand them to the embedded Claude chat.
 - **Go to definition** — `Cmd/Ctrl`-click a TypeScript symbol to jump to its definition (with a picker when there are multiple).
 - **Command palette** — fuzzy file search with smart ranking (`Cmd/Ctrl+K`).
 - **Scripts panel** — run the `npm` scripts defined in the project's `package.json` from the UI, with live streaming output, stop control, and pinning.
-- **Live file watching** — the UI updates over a WebSocket as files change on disk.
-- **Embedded Claude chat** — an optional in-browser chat backed by the local `claude` CLI. **Please read the [usage & billing note](#-embedded-claude-chat--usage--billing) before relying on it.**
+- **Live file watching** — the UI updates over a WebSocket as files change on disk; git polling can be toggled on/off from the branch chip in the header.
+- **Embedded Claude chat** — an optional in-browser chat backed by the local `claude` CLI (see the [usage & billing note](#-embedded-claude-chat--usage--billing)).
 
 ## Screenshots
 
 | Git diff visualization | Embedded Claude chat |
 | --- | --- |
 | ![Diff view](docs/screenshots/diff-view.png) | ![Claude chat](docs/screenshots/claude-chat.png) |
+
+| Full-text search | Git blame |
+| --- | --- |
+| ![Full-text search](docs/screenshots/search.png) | ![Git blame](docs/screenshots/blame.png) |
 
 ## Requirements
 
@@ -83,40 +89,25 @@ npm run dev
 | Shortcut | Action |
 | --- | --- |
 | `Cmd/Ctrl + K` | Open the command palette (fuzzy file search) |
+| `Cmd/Ctrl + Shift + F` | Open the search tab and focus the query input |
 | `Cmd/Ctrl + J` | Toggle between the Editor and Claude views |
-| `Ctrl + 1` / `2` / `3` / `4` | Switch sidebar tab: Explorer / Source Control / Comments / Scripts |
+| `Ctrl + 1` / `2` / `3` / `4` / `5` | Switch sidebar tab: Explorer / Search / Source Control / Comments / Scripts |
 | `Ctrl + 0` | Collapse / expand the sidebar |
+| `b` | Toggle the git blame column (in the open file) |
 | `z` / `x` | Previous / next changed file (in the Source Control view) |
 | `n` / `m` | Previous / next diff hunk (in the open file) |
 | `Cmd/Ctrl + Click` | Go to definition (TypeScript) |
 
-The single-character shortcuts (`z`, `x`, `n`, `m`) only fire in the Editor view and are suppressed while you're typing in an input or text area.
+The single-character shortcuts (`b`, `z`, `x`, `n`, `m`) only fire in the Editor view and are suppressed while you're typing in an input or text area.
 
 ## 🤖 Embedded Claude chat — usage & billing
 
-> [!IMPORTANT]
-> **As of June 15, 2026, Anthropic changed how Claude subscription plans are billed for programmatic use, and it directly affects this feature.**
-
-The embedded chat works by shelling out to the local `claude` CLI in headless mode (`claude -p …`). Under [Anthropic's updated policy](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan), **Claude Agent SDK and `claude -p` usage no longer counts toward your normal Claude plan usage limits.** Instead it draws from a **separate monthly credit allowance**:
-
-| Plan | Monthly Agent SDK / `claude -p` credit |
-| --- | --- |
-| Pro | $20 |
-| Max 5× | $100 |
-| Max 20× | $200 |
-| Team (Standard / Premium) | $20 / $100 |
-| Enterprise | $20 (usage-based) / $200 (seat-based Premium) |
-
-What this means in practice:
-
-- This credit is **separate** from — and much smaller than — the interactive usage you get with Claude Code in your terminal. Heavy use of the embedded chat can exhaust it quickly.
-- **Once the monthly credit runs out:** if you have **usage credits enabled**, further requests bill to those credits at **standard API rates** (this is the "restrictive/expensive" case — it's real per-token money). If you **don't** have usage credits enabled, the chat simply stops working until the credit refreshes the next month.
-- Credits **don't roll over** and **can't be shared** across teammates.
-
-Because of this, treat the embedded Claude chat as a convenience that may be limited or costly. If you don't need it, you can ignore it — the rest of Coast Guard works without the `claude` CLI installed.
+The embedded chat works by shelling out to the local `claude` CLI in headless mode (`claude -p …`), so it draws from whatever your CLI is signed in with — for subscription plans (Pro/Max/Team/Enterprise) it counts toward the **same usage limits as running Claude Code in your terminal**, and for API-key auth it bills at normal API rates.
 
 > [!NOTE]
-> This feature may be removed in a future version. The rest of the tool (file viewing, diffs, comments, scripts) does not depend on it.
+> In May 2026 Anthropic announced that Agent SDK / `claude -p` usage would move off subscription plans onto a separate, much smaller monthly credit allowance. That change was [paused on June 15, 2026 before it took effect](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) — headless usage still draws from your normal plan limits, and Anthropic says it will give advance notice before any future change. If billing behavior matters to you, check that article for the current policy.
+
+If you don't need the chat, you can ignore it — the rest of Coast Guard works without the `claude` CLI installed.
 
 ### Security note
 
