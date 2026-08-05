@@ -115,3 +115,13 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* In-file find highlights for the rendered markdown view (CSS Custom
+   Highlight API — see MarkdownViewer). Matches the code view's mark colors. */
+::highlight(coast-guard-find) {
+  background-color: rgba(255, 213, 0, 0.3);
+}
+
+::highlight(coast-guard-find-active) {
+  background-color: rgba(255, 150, 60, 0.6);
+}

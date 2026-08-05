@@ -1,7 +1,24 @@
+.viewerRoot {
+  position: relative;
+  height: 100%;
+}
+
 .container {
   height: 100%;
   overflow: auto;
   background: var(--bg-primary);
+}
+
+/* Find match highlights inside the code */
+.findMatch {
+  background: rgba(255, 213, 0, 0.25);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.findMatchActive {
+  background: rgba(255, 150, 60, 0.55);
+  outline: 1px solid rgba(255, 180, 100, 0.9);
 }
 
 .codeWrapper {

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
+import { FindBar, useFindBarState, createFindMatcher, FIND_MATCH_LIMIT } from '../FindBar';
 import { useFileContent } from '../../hooks/useFileContent';
 import { useFileDiff, useFileBlame } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
@@ -35,6 +36,20 @@ interface CodeViewerProps {
   onGoToDefinition?: (filePath: string, offset: number) => void;
   targetLine?: number | null;
   showBlame?: boolean;
+}
+
+// A single find hit, addressed by 1-based line number and 0-based columns.
+interface FindMatch {
+  line: number;
+  startCol: number;
+  endCol: number;
+}
+
+// Per-line view of a match used while rendering token segments.
+interface LineFindMatch {
+  startCol: number;
+  endCol: number;
+  isActive: boolean;
 }
 
 // Blame column sizing (px). Width persists across sessions.
@@ -192,6 +207,10 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // In-file find bar (Cmd/Ctrl+F). While the code view is mounted it replaces
+  // the browser's page search so results only come from the file contents.
+  const find = useFindBarState(!!filePath);
+
   // Track Cmd/Ctrl key state for go-to-definition
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -326,6 +345,56 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
 
   const content = fileData?.content || '';
   const language = filePath ? detectLanguage(filePath) : 'plaintext';
+
+  // All matches in file order. Searches the current file contents only —
+  // removed diff lines are not part of the working tree, so they're skipped.
+  const findMatches = useMemo(() => {
+    if (!find.open || !content) return [];
+    const matcher = createFindMatcher(find.query, find.caseSensitive, find.useRegex);
+    if (!matcher) return [];
+    const matches: FindMatch[] = [];
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      for (const [startCol, endCol] of matcher(lines[i])) {
+        matches.push({ line: i + 1, startCol, endCol });
+        if (matches.length >= FIND_MATCH_LIMIT) return matches;
+      }
+    }
+    return matches;
+  }, [find.open, find.query, find.caseSensitive, find.useRegex, content]);
+
+  // Any change to the match set restarts navigation from the first match
+  const { setActiveIndex: setFindActiveIndex } = find;
+  useEffect(() => {
+    setFindActiveIndex(0);
+  }, [findMatches, setFindActiveIndex]);
+
+  const findMatchesByLine = useMemo(() => {
+    if (findMatches.length === 0) return null;
+    const map = new Map<number, LineFindMatch[]>();
+    findMatches.forEach((m, i) => {
+      const arr = map.get(m.line) ?? [];
+      arr.push({ startCol: m.startCol, endCol: m.endCol, isActive: i === find.activeIndex });
+      map.set(m.line, arr);
+    });
+    return map;
+  }, [findMatches, find.activeIndex]);
+
+  // Keep the active match visible (block: center also handles horizontal
+  // scroll via inline: nearest on the mark element itself)
+  useEffect(() => {
+    if (!find.open || findMatches.length === 0) return;
+    const el = containerRef.current?.querySelector('[data-find-active]');
+    el?.scrollIntoView({ block: 'center', inline: 'nearest' });
+  }, [find.open, findMatches, find.activeIndex]);
+
+  const navigateFind = useCallback(
+    (dir: 1 | -1) => {
+      if (findMatches.length === 0) return;
+      setFindActiveIndex((i) => (i + dir + findMatches.length) % findMatches.length);
+    },
+    [findMatches.length, setFindActiveIndex]
+  );
 
   // Map each line number to its blame hunk; the hunk index drives the
   // alternating background tint that makes hunk boundaries readable.
@@ -634,6 +703,13 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
   }
 
   return (
+    <div className={styles.viewerRoot}>
+      <FindBar
+        find={find}
+        matchCount={findMatches.length}
+        capped={findMatches.length >= FIND_MATCH_LIMIT}
+        onNavigate={navigateFind}
+      />
     <div
       ref={containerRef}
       className={`${styles.container} ${cmdHeld ? styles.cmdHeld : ''}`}
@@ -688,7 +764,11 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
                         }}
                       />
                     ) : (
-                      renderTokenLine(lineNum !== null ? highlightedLines[lineNum - 1] : undefined, handleTokenClick)
+                      renderTokenLine(
+                        lineNum !== null ? highlightedLines[lineNum - 1] : undefined,
+                        handleTokenClick,
+                        lineNum !== null ? findMatchesByLine?.get(lineNum) : undefined
+                      )
                     )}
                   </td>
                 </tr>
@@ -719,6 +799,7 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }
@@ -800,13 +881,56 @@ function BlameCell({ info, commitUrlBase, onHover, onLeave, onResizeStart }: Bla
   );
 }
 
+// Split a token's text into plain and <mark>-wrapped segments wherever find
+// matches overlap it. Columns are relative to the line; tokenStart maps them
+// into this token's text.
+function renderFindSegments(
+  text: string,
+  tokenStart: number,
+  matches: LineFindMatch[],
+): React.ReactNode {
+  const tokenEnd = tokenStart + text.length;
+  const parts: React.ReactNode[] = [];
+  let pos = 0;
+
+  for (const m of matches) {
+    if (m.endCol <= tokenStart || m.startCol >= tokenEnd) continue;
+    const start = Math.max(m.startCol - tokenStart, pos);
+    const end = Math.min(m.endCol - tokenStart, text.length);
+    if (end <= start) continue;
+    if (start > pos) parts.push(text.slice(pos, start));
+    parts.push(
+      <mark
+        key={`${start}-${end}`}
+        className={`${styles.findMatch} ${m.isActive ? styles.findMatchActive : ''}`}
+        data-find-active={m.isActive ? 'true' : undefined}
+      >
+        {text.slice(start, end)}
+      </mark>
+    );
+    pos = end;
+  }
+
+  if (parts.length === 0) return text;
+  if (pos < text.length) parts.push(text.slice(pos));
+  return parts;
+}
+
 function renderTokenLine(
   tokens: TokenInfo[] | undefined,
   onTokenClick: (e: React.MouseEvent<HTMLSpanElement>) => void,
+  findMatches?: LineFindMatch[],
 ): React.ReactNode {
   if (!tokens || tokens.length === 0) return <>&nbsp;</>;
 
+  let col = 0;
   return tokens.map((token, i) => {
+    const tokenStart = col;
+    col += token.content.length;
+    const content = findMatches?.length
+      ? renderFindSegments(token.content, tokenStart, findMatches)
+      : token.content;
+
     if (token.isClickable) {
       return (
         <span
@@ -816,13 +940,13 @@ function renderTokenLine(
           data-offset={token.offset}
           onClick={onTokenClick}
         >
-          {token.content}
+          {content}
         </span>
       );
     }
     return (
       <span key={i} style={{ color: token.color }}>
-        {token.content}
+        {content}
       </span>
     );
   });

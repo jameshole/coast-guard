@@ -1,0 +1,100 @@
+/* In-file find bar (Cmd/Ctrl+F), floats over the top-right of a file view.
+   Fixed overall width: the match counter takes space from the input when it
+   appears, instead of widening the bar. */
+.findBar {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 340px;
+  padding: 4px 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.findIcon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.findInput {
+  flex: 1;
+  min-width: 40px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.findInput::placeholder {
+  color: var(--text-muted);
+}
+
+.findToggle {
+  flex-shrink: 0;
+  padding: 1px 4px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  line-height: 16px;
+}
+
+.findToggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.findToggleActive,
+.findToggleActive:hover {
+  background: var(--bg-selected);
+  color: var(--text-accent);
+}
+
+.findCount {
+  flex-shrink: 0;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.findCountError {
+  color: #f85149;
+}
+
+.findNavButton {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.findNavButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.findNavButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

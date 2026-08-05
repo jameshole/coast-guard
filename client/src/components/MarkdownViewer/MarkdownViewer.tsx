@@ -6,7 +6,18 @@ import { createHighlighter, type Highlighter } from 'shiki';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFileContent } from '../../hooks/useFileContent';
 import { api } from '../../services/api';
+import { FindBar, useFindBarState, createFindMatcher, FIND_MATCH_LIMIT } from '../FindBar';
 import styles from './MarkdownViewer.module.css';
+
+// CSS Custom Highlight API registry names (styled via ::highlight() in
+// globals.css). Highlighting through CSS.highlights never touches the DOM,
+// so it can't conflict with React's rendering of the markdown tree.
+const FIND_HIGHLIGHT = 'coast-guard-find';
+const FIND_ACTIVE_HIGHLIGHT = 'coast-guard-find-active';
+
+function cssHighlights(): Map<string, unknown> | undefined {
+  return (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
+}
 
 interface LineRange {
   startLine: number;
@@ -348,6 +359,105 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const queryClient = useQueryClient();
   const checkboxIndexRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const content = fileData?.content || '';
+
+  // In-file find over the rendered markdown text (Cmd/Ctrl+F)
+  const find = useFindBarState(true);
+  const [findRanges, setFindRanges] = useState<Range[]>([]);
+  const [domVersion, setDomVersion] = useState(0);
+
+  // Re-run match collection when the rendered DOM changes under us (async
+  // shiki highlighting of code blocks, checkbox refetches). Highlighting via
+  // CSS.highlights causes no mutations, so this can't loop.
+  useEffect(() => {
+    if (!find.open) return;
+    const root = containerRef.current;
+    if (!root) return;
+    const observer = new MutationObserver(() => setDomVersion((v) => v + 1));
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [find.open]);
+
+  // Collect match ranges by walking the rendered text nodes, skipping viewer
+  // chrome (line-range labels, copy buttons, code line numbers). Matches can't
+  // span element boundaries (e.g. half inside a **bold** span).
+  useEffect(() => {
+    const highlights = cssHighlights();
+    highlights?.delete(FIND_HIGHLIGHT);
+    highlights?.delete(FIND_ACTIVE_HIGHLIGHT);
+
+    const root = containerRef.current;
+    const matcher = find.open ? createFindMatcher(find.query, find.caseSensitive, find.useRegex) : null;
+    if (!root || !matcher) {
+      setFindRanges([]);
+      return;
+    }
+
+    const chromeSelector = `.${styles.lineLabel}, .${styles.copyButton}, .${styles.codeLineNumber}`;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) =>
+        node.parentElement && !node.parentElement.closest(chromeSelector)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    });
+
+    const ranges: Range[] = [];
+    outer: while (walker.nextNode()) {
+      const node = walker.currentNode;
+      for (const [start, end] of matcher(node.nodeValue ?? '')) {
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, end);
+        ranges.push(range);
+        if (ranges.length >= FIND_MATCH_LIMIT) break outer;
+      }
+    }
+
+    if (highlights && ranges.length > 0) {
+      const HighlightCtor = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+      highlights.set(FIND_HIGHLIGHT, new HighlightCtor(...ranges));
+    }
+    setFindRanges(ranges);
+  }, [find.open, find.query, find.caseSensitive, find.useRegex, content, domVersion]);
+
+  // Any change to the match set restarts navigation from the first match
+  const { setActiveIndex: setFindActiveIndex } = find;
+  useEffect(() => {
+    setFindActiveIndex(0);
+  }, [findRanges, setFindActiveIndex]);
+
+  // Mark the active match and scroll it into view
+  useEffect(() => {
+    const highlights = cssHighlights();
+    highlights?.delete(FIND_ACTIVE_HIGHLIGHT);
+    if (!find.open || findRanges.length === 0) return;
+    const range = findRanges[Math.min(find.activeIndex, findRanges.length - 1)];
+    if (highlights) {
+      const HighlightCtor = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+      highlights.set(FIND_ACTIVE_HIGHLIGHT, new HighlightCtor(range));
+    }
+    range.startContainer.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' });
+  }, [find.open, find.activeIndex, findRanges]);
+
+  // Drop our highlight registrations when the viewer unmounts
+  useEffect(
+    () => () => {
+      const highlights = cssHighlights();
+      highlights?.delete(FIND_HIGHLIGHT);
+      highlights?.delete(FIND_ACTIVE_HIGHLIGHT);
+    },
+    []
+  );
+
+  const navigateFind = useCallback(
+    (dir: 1 | -1) => {
+      if (findRanges.length === 0) return;
+      setFindActiveIndex((i) => (i + dir + findRanges.length) % findRanges.length);
+    },
+    [findRanges.length, setFindActiveIndex]
+  );
 
   // Per-line set of commented lines for the code-fence viewer (which highlights individual lines).
   const commentedLines = useMemo(() => {
@@ -374,6 +484,74 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
     [filePath, queryClient]
   );
 
+  // Memoized so re-renders keep the same component identities. Fresh
+  // identities would make ReactMarkdown tear down and rebuild the whole DOM
+  // tree on every render — wasteful, and an infinite loop with the find
+  // MutationObserver above (mutation → recompute → re-render → mutation).
+  const markdownComponents = useMemo(() => {
+    const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'table', 'hr'] as const;
+    const selectableComponents: Record<string, any> = {};
+    for (const tag of blockTags) {
+      selectableComponents[tag] = makeSelectableComponent(tag, onLineSelectionComplete, selectedLines, commentRanges);
+    }
+
+    return {
+      ...selectableComponents,
+      pre({ node }: any) {
+        // Block code: extract language and text from the hast <code> child
+        const codeNode = node?.children?.[0] as any;
+        if (codeNode?.tagName === 'code') {
+          const classNames = (codeNode.properties?.className as string[]) || [];
+          const langMatch = classNames.find((c: string) => /^language-/.test(c));
+          const language = langMatch ? langMatch.replace('language-', '') : 'plaintext';
+          const code = getTextContent(codeNode).replace(/\n$/, '');
+          const fenceStartLine = node?.position?.start?.line ?? 0;
+          return (
+            <SelectableCodeBlock
+              language={language}
+              code={code}
+              fenceStartLine={fenceStartLine}
+              onSelect={onLineSelectionComplete}
+              selectedLines={selectedLines}
+              commentedLines={commentedLines}
+            />
+          );
+        }
+        return <pre>{node?.children ? undefined : 'unknown'}</pre>;
+      },
+      code({ children, ...props }: any) {
+        // Only inline code reaches here; block code is handled by pre
+        return (
+          <code className={styles.inlineCode} {...props}>
+            {children}
+          </code>
+        );
+      },
+      a({ href, children }: any) {
+        return (
+          <a href={href} target="_blank" rel="noopener noreferrer">
+            {children}
+          </a>
+        );
+      },
+      input({ type, checked, disabled, ...props }: any) {
+        if (type === 'checkbox') {
+          const currentIndex = checkboxIndexRef.current++;
+          return (
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => handleCheckboxClick(currentIndex)}
+              className={styles.checkbox}
+              {...props}
+            />
+          );
+        }
+        return <input type={type} checked={checked} disabled={disabled} {...props} />;
+      },
+    };
+  }, [onLineSelectionComplete, selectedLines, commentRanges, commentedLines, handleCheckboxClick]);
+
   if (isLoading) {
     return (
       <div className={styles.loading}>
@@ -390,79 +568,21 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
     );
   }
 
-  const content = fileData?.content || '';
-
-  // Build selectable wrappers for block-level elements
-  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'table', 'hr'] as const;
-  const selectableComponents: Record<string, any> = {};
-  for (const tag of blockTags) {
-    selectableComponents[tag] = makeSelectableComponent(tag, onLineSelectionComplete, selectedLines, commentRanges);
-  }
-
   return (
-    <div className={styles.container}>
+    <div className={styles.viewerRoot}>
+      <FindBar
+        find={find}
+        matchCount={findRanges.length}
+        capped={findRanges.length >= FIND_MATCH_LIMIT}
+        onNavigate={navigateFind}
+      />
+    <div className={styles.container} ref={containerRef}>
       <article className={styles.article}>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            ...selectableComponents,
-            pre({ node }) {
-              // Block code: extract language and text from the hast <code> child
-              const codeNode = node?.children?.[0] as any;
-              if (codeNode?.tagName === 'code') {
-                const classNames = (codeNode.properties?.className as string[]) || [];
-                const langMatch = classNames.find((c: string) => /^language-/.test(c));
-                const language = langMatch ? langMatch.replace('language-', '') : 'plaintext';
-                const code = getTextContent(codeNode).replace(/\n$/, '');
-                const fenceStartLine = node?.position?.start?.line ?? 0;
-                return (
-                  <SelectableCodeBlock
-                    language={language}
-                    code={code}
-                    fenceStartLine={fenceStartLine}
-                    onSelect={onLineSelectionComplete}
-                    selectedLines={selectedLines}
-                    commentedLines={commentedLines}
-                  />
-                );
-              }
-              return <pre>{node?.children ? undefined : 'unknown'}</pre>;
-            },
-            code({ children, ...props }) {
-              // Only inline code reaches here; block code is handled by pre
-              return (
-                <code className={styles.inlineCode} {...props}>
-                  {children}
-                </code>
-              );
-            },
-            a({ href, children }) {
-              return (
-                <a href={href} target="_blank" rel="noopener noreferrer">
-                  {children}
-                </a>
-              );
-            },
-            input({ type, checked, disabled, ...props }) {
-              if (type === 'checkbox') {
-                const currentIndex = checkboxIndexRef.current++;
-                return (
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => handleCheckboxClick(currentIndex)}
-                    className={styles.checkbox}
-                    {...props}
-                  />
-                );
-              }
-              return <input type={type} checked={checked} disabled={disabled} {...props} />;
-            },
-          }}
-        >
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
           {content}
         </ReactMarkdown>
       </article>
+    </div>
     </div>
   );
 }
