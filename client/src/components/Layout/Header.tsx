@@ -98,7 +98,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
   );
 
   // n/m jump between diff hunks in the open file (m = next, n = previous, same
-  // wrap behavior as the chevron buttons). Editor view only — plain characters
+  // wrap behavior as the chevron buttons). File view only — plain characters
   // must not steal keys from the Claude view.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -202,10 +202,10 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
         <button
           className={`${styles.viewToggleButton} ${mainView === 'editor' ? styles.viewToggleButtonActive : ''}`}
           onClick={() => mainView !== 'editor' && onToggleMainView()}
-          title="Editor (Cmd/Ctrl+J to toggle)"
+          title="File (Cmd/Ctrl+J to toggle)"
         >
           <FileText size={14} />
-          <span>Editor</span>
+          <span>File</span>
         </button>
         <button
           className={`${styles.viewToggleButton} ${mainView === 'claude' ? styles.viewToggleButtonActive : ''}`}

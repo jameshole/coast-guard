@@ -146,7 +146,7 @@ function AppContent() {
     setMarkdownCodeView(false);
   }, []);
 
-  // Global keyboard shortcuts: cmd+k command palette, cmd+j toggle Editor/Claude view
+  // Global keyboard shortcuts: cmd+k command palette, cmd+j toggle File/Claude view
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -163,7 +163,7 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // b toggles the git blame column in the code view. Editor view only — plain
+  // b toggles the git blame column in the code view. File view only — plain
   // characters must not steal keys from the Claude view.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
