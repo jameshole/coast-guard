@@ -41,6 +41,9 @@ export function useFileWatcher(currentFile: string | null): { connected: boolean
           const data: FileChangeEvent = JSON.parse(event.data);
 
           if (data.type === 'connected') {
+            // The server may have restarted (or come up after the tab loaded);
+            // refetch project info so the full/lite mode gate stays correct.
+            queryClient.invalidateQueries({ queryKey: ['projectInfo'] });
             return;
           }
 

@@ -33,6 +33,10 @@ export interface FileDiff {
 export interface ProjectInfo {
   path: string;
   name: string;
+  /** True when the server was launched by the `scout` single-file bin */
+  lite?: boolean;
+  /** Project-relative path of the file scout was launched with */
+  initialFile?: string | null;
 }
 
 export type GitFileStatus = 'modified' | 'staged' | 'untracked';

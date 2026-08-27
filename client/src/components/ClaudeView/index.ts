@@ -1,2 +1,2 @@
 export { ClaudeView } from './ClaudeView';
-export { ClaudeProvider, useClaude } from './ClaudeContext';
+export { ClaudeProvider, useClaude, useClaudeOptional } from './ClaudeContext';

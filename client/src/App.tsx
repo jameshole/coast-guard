@@ -10,6 +10,8 @@ import { CommentPanel } from './components/CommentPanel';
 import type { Comment } from './components/CommentPanel';
 import { ClaudeView, ClaudeProvider } from './components/ClaudeView';
 import { ScriptsProvider, ScriptsPanel } from './components/ScriptsPanel';
+import { LiteApp } from './components/Lite';
+import { ServerOffline } from './components/ServerOffline';
 import type { DefinitionResult } from './types';
 import { api } from './services/api';
 import { isTypingTarget } from './utils/keyboard';
@@ -266,34 +268,7 @@ function AppContent() {
   };
 
   if (!connected) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        backgroundColor: 'var(--bg-primary)',
-        color: 'var(--text-secondary)',
-        gap: '16px',
-      }}>
-        <div style={{
-          width: '48px',
-          height: '48px',
-          border: '3px solid var(--border-color)',
-          borderTopColor: 'var(--text-secondary)',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={{ fontSize: '18px', color: 'var(--text-primary)' }}>
-          Server offline
-        </div>
-        <div style={{ fontSize: '13px' }}>
-          Waiting for server to reconnect...
-        </div>
-      </div>
-    );
+    return <ServerOffline />;
   }
 
   return (
@@ -421,11 +396,28 @@ function LoadingBar() {
   );
 }
 
+// Decide between the full app and the lite scout app based on how the
+// server was launched. Renders nothing while project info loads to avoid
+// flashing the wrong shell (the fetch is local, so this is near-instant).
+function ModeGate() {
+  const { data: projectInfo, isLoading } = useProjectInfo();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (projectInfo?.lite && projectInfo.initialFile) {
+    return <LiteApp initialFile={projectInfo.initialFile} />;
+  }
+
+  return <AppContent />;
+}
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <DiffBaseProvider>
-        <AppContent />
+        <ModeGate />
       </DiffBaseProvider>
     </QueryClientProvider>
   );

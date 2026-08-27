@@ -185,3 +185,12 @@ export function useClaude(): ClaudeContextValue {
   if (!ctx) throw new Error('useClaude must be used inside <ClaudeProvider>');
   return ctx;
 }
+
+/**
+ * Like useClaude, but returns null when no provider is mounted. Used by
+ * components (e.g. CommentPanel) that also render in the lite scout app,
+ * where there is no Claude chat.
+ */
+export function useClaudeOptional(): ClaudeContextValue | null {
+  return useContext(ClaudeContext);
+}

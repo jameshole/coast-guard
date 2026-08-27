@@ -82,4 +82,8 @@ export interface SearchResponse {
 export interface ServerConfig {
   projectPath: string;
   port: number;
+  /** Lite single-file mode (the `scout` bin): file viewer + comments only */
+  lite?: boolean;
+  /** Project-relative path of the file scout was launched with */
+  initialFile?: string;
 }

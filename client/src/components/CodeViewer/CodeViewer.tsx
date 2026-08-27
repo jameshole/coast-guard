@@ -36,6 +36,8 @@ interface CodeViewerProps {
   onGoToDefinition?: (filePath: string, offset: number) => void;
   targetLine?: number | null;
   showBlame?: boolean;
+  /** Skip all git-backed queries (diff + blame) — used by the lite scout app */
+  disableGit?: boolean;
 }
 
 // A single find hit, addressed by 1-based line number and 0-based columns.
@@ -182,12 +184,12 @@ function isIdentifierToken(scopes: string[]): boolean {
   return true;
 }
 
-export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine, showBlame = false }: CodeViewerProps) {
+export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine, showBlame = false, disableGit = false }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const { baseRef } = useDiffBase();
-  const { data: diffData } = useFileDiff(filePath, ignoreWhitespace, baseRef);
+  const { data: diffData } = useFileDiff(disableGit ? null : filePath, ignoreWhitespace, baseRef);
   // Blame is only fetched while the column is toggled on
-  const { data: blameData } = useFileBlame(showBlame ? filePath : null);
+  const { data: blameData } = useFileBlame(showBlame && !disableGit ? filePath : null);
   const [highlightedLines, setHighlightedLines] = useState<TokenInfo[][]>([]);
   const [highlightedRemovedLines, setHighlightedRemovedLines] = useState<Map<string, string>>(new Map());
   const [isHighlighting, setIsHighlighting] = useState(false);

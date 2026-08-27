@@ -76,6 +76,17 @@ coast-guard . --no-open          # don't auto-open the browser
 
 The server opens `http://localhost:3847` by default. Press `Ctrl+C` to stop.
 
+### 🧭 scout — single-file lite mode
+
+When you just want to read one file (usually a markdown doc), the full app is overkill. The `scout` bin serves a lite version — the file viewer plus review comments, nothing else:
+
+```bash
+scout NOTES.md
+scout ~/code/my-app/README.md --port 4000
+```
+
+It takes the same `--port` and `--no-open` options as `coast-guard`. You get syntax highlighting for any file type, the rendered/code toggle for markdown (with clickable checkboxes that write back), `Cmd/Ctrl+F` in-file find, and inline comments with copy-out. The file is watched, so edits on disk refresh the view live. There's no git integration, file tree, search, scripts panel, or Claude chat.
+
 ### Development
 
 Run the server and client in watch mode (Vite dev server + `tsx watch`) instead of a production build:

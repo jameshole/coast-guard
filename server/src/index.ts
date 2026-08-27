@@ -65,6 +65,8 @@ export function createServer(config: ServerConfig): CreateServerResult {
     res.json({
       path: config.projectPath,
       name: path.basename(config.projectPath),
+      lite: !!config.lite,
+      initialFile: config.initialFile ?? null,
     });
   });
 
@@ -139,8 +141,10 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
   };
   setBroadcast(broadcast);
 
-  // Start the file watcher, honouring the persisted git-watch preference
-  watchService.start(settingsStore.get().gitWatchEnabled);
+  // Start the file watcher, honouring the persisted git-watch preference.
+  // Lite mode has no git integration, so never poll git status there — the
+  // per-file chokidar watch still delivers live updates for the open file.
+  watchService.start(config.lite ? false : settingsStore.get().gitWatchEnabled);
 
   // Broadcast file changes to all connected clients
   watchService.on('change', (event: FileChangeEvent) => {

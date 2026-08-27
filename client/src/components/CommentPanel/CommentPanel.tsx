@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Copy, Trash2, Send, MessageSquarePlus, X } from 'lucide-react';
-import { useClaude } from '../ClaudeView';
+import { useClaudeOptional } from '../ClaudeView';
 import styles from './CommentPanel.module.css';
 
 export interface Comment {
@@ -17,8 +17,8 @@ interface CommentPanelProps {
   onAddComment: (comment: Omit<Comment, 'id'>) => void;
   onDeleteComment: (id: string) => void;
   onClearAll: () => void;
-  /** Bring the Claude chat view into focus (used by the Send action). */
-  onFocusClaude: () => void;
+  /** Bring the Claude chat view into focus (used by the Send action). Omitted in the lite app, which has no Claude chat. */
+  onFocusClaude?: () => void;
   /** When set, shows the "add comment" form for this line range */
   pendingSelection: { startLine: number; endLine: number } | null;
   onCancelSelection: () => void;
@@ -44,7 +44,9 @@ export function CommentPanel({
   onCancelSelection,
 }: CommentPanelProps) {
   const [newCommentBody, setNewCommentBody] = useState('');
-  const { send, isStreaming } = useClaude();
+  // Null in the lite scout app, where there is no Claude chat
+  const claude = useClaudeOptional();
+  const isStreaming = claude?.isStreaming ?? false;
 
   const currentFileComments = comments.filter((c) => c.filePath === currentFile);
   const hasAnyComments = comments.length > 0;
@@ -55,9 +57,9 @@ export function CommentPanel({
   };
 
   const handleSend = () => {
-    if (!hasAnyComments || isStreaming) return;
-    onFocusClaude();
-    void send(formatCommentsForCopy(comments));
+    if (!claude || !hasAnyComments || isStreaming) return;
+    onFocusClaude?.();
+    void claude.send(formatCommentsForCopy(comments));
   };
 
   const handleSubmitComment = () => {
@@ -106,15 +108,17 @@ export function CommentPanel({
             <Trash2 size={14} />
             <span>Delete</span>
           </button>
-          <button
-            className={styles.actionBtn}
-            onClick={handleSend}
-            disabled={!hasAnyComments || isStreaming}
-            title={isStreaming ? 'Claude is responding…' : 'Send all comments to Claude'}
-          >
-            <Send size={14} />
-            <span>Send</span>
-          </button>
+          {claude && (
+            <button
+              className={styles.actionBtn}
+              onClick={handleSend}
+              disabled={!hasAnyComments || isStreaming}
+              title={isStreaming ? 'Claude is responding…' : 'Send all comments to Claude'}
+            >
+              <Send size={14} />
+              <span>Send</span>
+            </button>
+          )}
         </div>
       </div>
 

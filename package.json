@@ -8,7 +8,8 @@
     "client"
   ],
   "bin": {
-    "coast-guard": "./bin/coast-guard.js"
+    "coast-guard": "./bin/coast-guard.js",
+    "scout": "./bin/scout.js"
   },
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
