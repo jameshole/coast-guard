@@ -7,22 +7,25 @@ export class GitService {
   private git: SimpleGit;
   private projectPath: string;
   private commitUrlBasePromise: Promise<string | null> | null = null;
+  private isRepoPromise: Promise<boolean> | null = null;
 
   constructor(projectPath: string) {
     this.projectPath = projectPath;
     this.git = simpleGit(projectPath);
   }
 
-  async isGitRepo(): Promise<boolean> {
-    try {
-      await this.git.status();
-      return true;
-    } catch {
-      return false;
+  // Whether the project lives inside a git work tree. Checked once and cached
+  // for the lifetime of the server so browsing a plain directory never shells
+  // out to git on every request (every other method short-circuits on this).
+  isGitRepo(): Promise<boolean> {
+    if (!this.isRepoPromise) {
+      this.isRepoPromise = this.git.checkIsRepo().catch(() => false);
     }
+    return this.isRepoPromise;
   }
 
   async getBranch(): Promise<string | null> {
+    if (!(await this.isGitRepo())) return null;
     try {
       const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
       return branch.trim();
@@ -32,6 +35,7 @@ export class GitService {
   }
 
   async listBranches(): Promise<string[]> {
+    if (!(await this.isGitRepo())) return [];
     try {
       const result = await this.git.branchLocal();
       return result.all;
@@ -41,6 +45,7 @@ export class GitService {
   }
 
   async verifyRef(ref: string): Promise<boolean> {
+    if (!(await this.isGitRepo())) return false;
     // Handle range syntax (a..b, a...b) - validate each side; empty side defaults to HEAD
     const rangeMatch = ref.match(/^(.*?)(\.\.\.?)(.*)$/);
     if (rangeMatch) {
@@ -58,6 +63,8 @@ export class GitService {
   }
 
   async getStatus(): Promise<GitStatus> {
+    const empty: GitStatus = { modified: [], staged: [], untracked: [], deleted: [], renamed: [] };
+    if (!(await this.isGitRepo())) return empty;
     try {
       const status: StatusResult = await this.git.status();
 
@@ -74,13 +81,7 @@ export class GitService {
         renamed: status.renamed.map((r) => ({ from: r.from, to: r.to })),
       };
     } catch {
-      return {
-        modified: [],
-        staged: [],
-        untracked: [],
-        deleted: [],
-        renamed: [],
-      };
+      return empty;
     }
   }
 
@@ -93,6 +94,7 @@ export class GitService {
       staged: null,
       unstaged: null,
     };
+    if (!(await this.isGitRepo())) return result;
 
     try {
       const baseArgs = ignoreWhitespace ? ['-w'] : [];
@@ -116,7 +118,9 @@ export class GitService {
         }
       }
     } catch (error) {
-      console.error('Error getting diff for', filePath, error);
+      // Log the first line only: simple-git errors carry git's full usage text
+      const message = error instanceof Error ? error.message.split('\n')[0] : String(error);
+      console.error(`Error getting diff for ${filePath}: ${message}`);
     }
 
     return result;
@@ -199,6 +203,7 @@ export class GitService {
     let insertions = 0;
     let deletions = 0;
     let filesChanged = 0;
+    if (!(await this.isGitRepo())) return { filesChanged, insertions, deletions };
 
     try {
       const summary = await this.git.diffSummary([baseRef]);
@@ -241,6 +246,7 @@ export class GitService {
     baseRef: string = 'HEAD',
   ): Promise<Map<string, 'modified' | 'staged' | 'untracked'>> {
     const fileMap = new Map<string, 'modified' | 'staged' | 'untracked'>();
+    if (!(await this.isGitRepo())) return fileMap;
 
     if (baseRef === 'HEAD') {
       const status = await this.getStatus();
@@ -283,6 +289,7 @@ export class GitService {
 
   async getFileBlame(filePath: string): Promise<FileBlame> {
     let hunks: BlameHunk[] = [];
+    if (!(await this.isGitRepo())) return { hunks, commitUrlBase: null };
     try {
       const raw = await this.git.raw(['blame', '--porcelain', '--', filePath]);
       hunks = this.parseBlamePorcelain(raw);

@@ -26,6 +26,7 @@ interface CreateServerResult {
   settingsStore: SettingsStore;
   /** Wired up once the WebSocket server exists, so settings changes can be pushed to clients */
   setBroadcast: (fn: (payload: unknown) => void) => void;
+  gitService: GitService;
 }
 
 export function createServer(config: ServerConfig): CreateServerResult {
@@ -88,7 +89,7 @@ export function createServer(config: ServerConfig): CreateServerResult {
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 
-  return { app, scriptRunner, watchService, settingsStore, setBroadcast };
+  return { app, scriptRunner, watchService, settingsStore, setBroadcast, gitService };
 }
 
 interface StartServerResult {
@@ -100,7 +101,8 @@ interface StartServerResult {
 }
 
 export async function startServer(config: ServerConfig): Promise<StartServerResult> {
-  const { app, scriptRunner, watchService, settingsStore, setBroadcast } = createServer(config);
+  const { app, scriptRunner, watchService, settingsStore, setBroadcast, gitService } =
+    createServer(config);
   const httpServer = createHttpServer(app);
 
   // Find an available port first
@@ -144,7 +146,13 @@ export async function startServer(config: ServerConfig): Promise<StartServerResu
   // Start the file watcher, honouring the persisted git-watch preference.
   // Lite mode has no git integration, so never poll git status there — the
   // per-file chokidar watch still delivers live updates for the open file.
-  watchService.start(config.lite ? false : settingsStore.get().gitWatchEnabled);
+  // Plain (non-git) directories skip polling too, so no git commands run at all.
+  if (config.lite) {
+    watchService.start(false);
+  } else {
+    const isGitRepo = await gitService.isGitRepo();
+    watchService.start(isGitRepo && settingsStore.get().gitWatchEnabled, isGitRepo);
+  }
 
   // Broadcast file changes to all connected clients
   watchService.on('change', (event: FileChangeEvent) => {

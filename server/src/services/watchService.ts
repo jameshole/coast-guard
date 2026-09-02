@@ -19,6 +19,7 @@ export class WatchService extends EventEmitter {
   private lastGitStatus: string | null = null; // Serialized status for comparison
   private debounceTimer: NodeJS.Timeout | null = null;
   private gitPollingEnabled = true;
+  private gitAvailable = true;
 
   constructor(rootDir: string) {
     super();
@@ -26,14 +27,23 @@ export class WatchService extends EventEmitter {
     this.git = simpleGit(rootDir);
   }
 
-  start(gitPollingEnabled: boolean = true): void {
+  /**
+   * @param gitPollingEnabled the user's git-watch preference
+   * @param gitAvailable whether rootDir is inside a git work tree; when false,
+   *   git status polling is never started regardless of the preference
+   */
+  start(gitPollingEnabled: boolean = true, gitAvailable: boolean = true): void {
+    this.gitAvailable = gitAvailable;
     this.gitPollingEnabled = gitPollingEnabled;
     if (gitPollingEnabled) {
       this.startGitPolling();
     }
-    console.log(
-      `File watcher started (single file watch${gitPollingEnabled ? ' + git polling' : ', git polling disabled'})`,
-    );
+    const pollingState = !gitAvailable
+      ? ', git polling disabled: not a git repository'
+      : gitPollingEnabled
+        ? ' + git polling'
+        : ', git polling disabled';
+    console.log(`File watcher started (single file watch${pollingState})`);
   }
 
   isGitPollingEnabled(): boolean {
@@ -60,7 +70,7 @@ export class WatchService extends EventEmitter {
   }
 
   private startGitPolling(): void {
-    if (this.pollInterval) return;
+    if (this.pollInterval || !this.gitAvailable) return;
 
     // Poll git status every 2 seconds
     const poll = async () => {

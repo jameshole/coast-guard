@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Circle } from 'lucide-react';
-import { useChangedFiles, useDiffStats } from '../../hooks/useGitStatus';
+import { useChangedFiles, useDiffStats, useGitCheck } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
 import { getFileIcon, getFileIconColor } from '../FileTree/fileIcons';
 import { isTypingTarget } from '../../utils/keyboard';
@@ -35,6 +35,7 @@ const statusColor: Record<GitFileStatus, string> = {
 
 export function GitChangedFiles({ onFileSelect, selectedFile, shortcutsEnabled }: GitChangedFilesProps) {
   const { baseRef } = useDiffBase();
+  const { data: gitCheck } = useGitCheck();
   const { data: changedFiles, isLoading } = useChangedFiles(baseRef);
   const { data: diffStats } = useDiffStats(baseRef);
   const listRef = useRef<HTMLDivElement>(null);
@@ -86,6 +87,18 @@ export function GitChangedFiles({ onFileSelect, selectedFile, shortcutsEnabled }
 
   const hasStats =
     diffStats && (diffStats.filesChanged > 0 || diffStats.insertions > 0 || diffStats.deletions > 0);
+
+  if (gitCheck && !gitCheck.isGitRepo) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.fileList}>
+          <div className={styles.empty}>
+            <span>Not a git repository</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
