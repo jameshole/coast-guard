@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useFileContent } from '../../hooks/useFileContent';
 import { api } from '../../services/api';
 import { FindBar, useFindBarState, createFindMatcher, FIND_MATCH_LIMIT } from '../FindBar';
+import type { ScrollRequest } from '../../types';
 import styles from './MarkdownViewer.module.css';
 
 // CSS Custom Highlight API registry names (styled via ::highlight() in
@@ -29,6 +30,31 @@ interface MarkdownViewerProps {
   onLineSelectionComplete?: (startLine: number, endLine: number) => void;
   selectedLines?: LineRange | null;
   commentRanges?: LineRange[];
+  /** Scroll to a line range once (used when jumping to a comment) */
+  scrollRequest?: ScrollRequest | null;
+}
+
+/**
+ * Finds the rendered element for a source line range: a code-fence row for
+ * that exact line, else the block whose range matches exactly, else the
+ * innermost block containing the start line.
+ */
+function findElementForRange(root: HTMLElement, range: LineRange): Element | null {
+  const codeRow = root.querySelector(`tr[data-line="${range.startLine}"]`);
+  if (codeRow) return codeRow;
+
+  let best: Element | null = null;
+  let bestSpan = Infinity;
+  for (const el of root.querySelectorAll('[data-start-line]')) {
+    const start = Number(el.getAttribute('data-start-line'));
+    const end = Number(el.getAttribute('data-end-line'));
+    if (start === range.startLine && end === range.endLine) return el;
+    if (start <= range.startLine && range.startLine <= end && end - start < bestSpan) {
+      best = el;
+      bestSpan = end - start;
+    }
+  }
+  return best;
 }
 
 // Highlighter singleton for code blocks
@@ -196,6 +222,7 @@ function SelectableCodeBlock({
               return (
                 <tr
                   key={i}
+                  data-line={sourceLine}
                   className={`${styles.codeLine} ${isSelected ? styles.selectedCodeLine : ''} ${hasComment ? styles.commentedCodeLine : ''}`}
                 >
                   <td
@@ -271,6 +298,8 @@ function SelectableBlock({
 
   return (
     <div
+      data-start-line={startLine}
+      data-end-line={endLine}
       className={`${styles.selectableBlock} ${isSelected ? styles.selectedBlock : ''} ${hasComment ? styles.commentedBlock : ''}`}
       onClick={(e) => {
         // Don't trigger on checkbox clicks or link clicks
@@ -324,6 +353,8 @@ function makeSelectableComponent(
       return (
         <li
           {...props}
+          data-start-line={startLine}
+          data-end-line={endLine}
           className={combinedClassName}
           onClick={(e) => {
             if ((e.target as HTMLElement).closest('input, a')) return;
@@ -355,13 +386,25 @@ function makeSelectableComponent(
   };
 }
 
-export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLines, commentRanges }: MarkdownViewerProps) {
+export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLines, commentRanges, scrollRequest }: MarkdownViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const queryClient = useQueryClient();
   const checkboxIndexRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const content = fileData?.content || '';
+
+  // Scroll to a requested line range. Each request is handled once, as soon as
+  // a matching element is rendered, so live content refreshes don't re-scroll.
+  const handledScrollId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!scrollRequest || handledScrollId.current === scrollRequest.id || !containerRef.current) return;
+    const el = findElementForRange(containerRef.current, scrollRequest);
+    if (el) {
+      handledScrollId.current = scrollRequest.id;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [scrollRequest, content, isLoading]);
 
   // In-file find over the rendered markdown text (Cmd/Ctrl+F)
   const find = useFindBarState(true);

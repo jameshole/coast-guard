@@ -169,9 +169,15 @@
 }
 
 .lineRange {
+  padding: 0;
   font-size: 11px;
   color: var(--text-accent);
   font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.lineRange:hover {
+  text-decoration: underline;
 }
 
 .deleteBtn {
@@ -196,6 +202,46 @@
   color: var(--text-primary);
   white-space: pre-wrap;
   line-height: 1.4;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: text;
+}
+
+.commentBody:hover {
+  background: var(--bg-hover);
+}
+
+/* Sort order selector */
+.sortBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sortSelect {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+
+.sortSelect:hover {
+  color: var(--text-primary);
+}
+
+.sortSelect option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 /* Empty state */

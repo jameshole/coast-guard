@@ -12,7 +12,7 @@ import { ClaudeView, ClaudeProvider } from './components/ClaudeView';
 import { ScriptsProvider, ScriptsPanel } from './components/ScriptsPanel';
 import { LiteApp } from './components/Lite';
 import { ServerOffline } from './components/ServerOffline';
-import type { DefinitionResult } from './types';
+import type { DefinitionResult, ScrollRequest } from './types';
 import { api } from './services/api';
 import { isTypingTarget } from './utils/keyboard';
 import { useFileWatcher } from './hooks/useFileWatcher';
@@ -49,6 +49,7 @@ function urlToFile(pathname: string): string | null {
 }
 
 let commentIdCounter = 0;
+let scrollRequestCounter = 0;
 
 function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(() =>
@@ -61,6 +62,7 @@ function AppContent() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ startLine: number; endLine: number } | null>(null);
   const [targetLine, setTargetLine] = useState<number | null>(null);
+  const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
   const [definitionResults, setDefinitionResults] = useState<DefinitionResult[]>([]);
   const [definitionSymbol, setDefinitionSymbol] = useState('');
   const [isDefinitionPickerOpen, setIsDefinitionPickerOpen] = useState(false);
@@ -188,6 +190,23 @@ function AppContent() {
     setComments((prev) => [...prev, { ...comment, id }]);
   }, []);
 
+  const handleUpdateComment = useCallback((id: string, body: string) => {
+    setComments((prev) => prev.map((c) => (c.id === id ? { ...c, body } : c)));
+  }, []);
+
+  // Scroll the editor to a comment's lines, opening its file first if it isn't
+  // the current one. Staying on the same file keeps the markdown view mode.
+  const handleJumpToComment = useCallback((comment: Comment) => {
+    if (comment.filePath !== selectedFile) {
+      setSelectedFile(comment.filePath);
+      setPendingSelection(null);
+      setTargetLine(null);
+      setMarkdownCodeView(false);
+    }
+    setMainView('editor');
+    setScrollRequest({ id: ++scrollRequestCounter, startLine: comment.startLine, endLine: comment.endLine });
+  }, [selectedFile]);
+
   const handleDeleteComment = useCallback((id: string) => {
     setComments((prev) => prev.filter((c) => c.id !== id));
   }, []);
@@ -249,6 +268,7 @@ function AppContent() {
           selectedLines={pendingSelection}
           onLineSelectionComplete={handleLineSelectionComplete}
           commentRanges={commentRanges}
+          scrollRequest={scrollRequest}
         />
       );
     }
@@ -262,6 +282,7 @@ function AppContent() {
         commentedLines={commentedLines}
         onGoToDefinition={handleGoToDefinition}
         targetLine={targetLine}
+        scrollRequest={scrollRequest}
         showBlame={showBlame}
       />
     );
@@ -288,8 +309,10 @@ function AppContent() {
                 comments={comments}
                 currentFile={selectedFile}
                 onAddComment={handleAddComment}
+                onUpdateComment={handleUpdateComment}
                 onDeleteComment={handleDeleteComment}
                 onClearAll={handleClearAll}
+                onJumpToComment={handleJumpToComment}
                 onFocusClaude={() => setMainView('claude')}
                 pendingSelection={pendingSelection}
                 onCancelSelection={handleCancelSelection}

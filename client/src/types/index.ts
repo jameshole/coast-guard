@@ -87,3 +87,13 @@ export interface SearchResponse {
   totalMatches: number;
   truncated: boolean;
 }
+
+/**
+ * A one-shot request for a viewer to scroll to a line range. `id` changes on
+ * every request so jumping to the same lines twice still scrolls.
+ */
+export interface ScrollRequest {
+  id: number;
+  startLine: number;
+  endLine: number;
+}

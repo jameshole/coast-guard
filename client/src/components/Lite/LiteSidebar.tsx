@@ -1,5 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { MessageSquare, PanelLeftClose } from 'lucide-react';
+import { useSidebarResize } from '../Sidebar/useSidebarResize';
 import styles from '../Sidebar/Sidebar.module.css';
 
 interface LiteSidebarProps {
@@ -8,11 +9,10 @@ interface LiteSidebarProps {
   pendingSelection: { startLine: number; endLine: number } | null;
 }
 
-const CONTENT_WIDTH = 260;
-
 /** Comments-only sidebar for the scout single-file app. */
 export function LiteSidebar({ commentCount, commentPanel, pendingSelection }: LiteSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const { contentWidth, resizing, handleResizeStart } = useSidebarResize();
 
   // Selecting lines in the viewer opens the panel so the comment form is visible
   useEffect(() => {
@@ -40,12 +40,13 @@ export function LiteSidebar({ commentCount, commentPanel, pendingSelection }: Li
         </button>
       </div>
       <div
-        className={`${styles.contentWrapper} ${collapsed ? styles.contentCollapsed : ''}`}
-        style={!collapsed ? { width: CONTENT_WIDTH + 4 } : undefined}
+        className={`${styles.contentWrapper} ${collapsed ? styles.contentCollapsed : ''} ${resizing ? styles.noTransition : ''}`}
+        style={!collapsed ? { width: contentWidth + 4 } : undefined}
       >
-        <div className={styles.content} style={{ width: CONTENT_WIDTH }}>
+        <div className={styles.content} style={{ width: contentWidth }}>
           {!collapsed && commentPanel}
         </div>
+        <div className={styles.resizeHandle} onMouseDown={handleResizeStart} />
       </div>
     </div>
   );

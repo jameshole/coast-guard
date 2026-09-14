@@ -6,7 +6,7 @@ import { useFileDiff, useFileBlame } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
 import { DiffGutter } from './DiffGutter';
 import { formatRelativeTime } from '../../utils/time';
-import type { LineDiff, BlameHunk } from '../../types';
+import type { LineDiff, BlameHunk, ScrollRequest } from '../../types';
 import styles from './CodeViewer.module.css';
 
 interface TokenInfo {
@@ -35,6 +35,8 @@ interface CodeViewerProps {
   commentedLines?: Set<number>;
   onGoToDefinition?: (filePath: string, offset: number) => void;
   targetLine?: number | null;
+  /** Scroll to a line range once (used when jumping to a comment) */
+  scrollRequest?: ScrollRequest | null;
   showBlame?: boolean;
   /** Skip all git-backed queries (diff + blame) — used by the lite scout app */
   disableGit?: boolean;
@@ -184,7 +186,7 @@ function isIdentifierToken(scopes: string[]): boolean {
   return true;
 }
 
-export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine, showBlame = false, disableGit = false }: CodeViewerProps) {
+export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, onLineSelectionComplete, commentedLines, onGoToDefinition, targetLine, scrollRequest, showBlame = false, disableGit = false }: CodeViewerProps) {
   const { data: fileData, isLoading, error } = useFileContent(filePath);
   const { baseRef } = useDiffBase();
   const { data: diffData } = useFileDiff(disableGit ? null : filePath, ignoreWhitespace, baseRef);
@@ -241,6 +243,18 @@ export function CodeViewer({ filePath, ignoreWhitespace = false, selectedLines, 
       }
     }
   }, [targetLine, highlightedLines]);
+
+  // Scroll to a requested line range. Each request is handled once, as soon as
+  // its row exists, so live content refreshes don't yank the view back.
+  const handledScrollId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!scrollRequest || handledScrollId.current === scrollRequest.id || !containerRef.current) return;
+    const row = containerRef.current.querySelector(`tr[data-line="${scrollRequest.startLine}"]`);
+    if (row) {
+      handledScrollId.current = scrollRequest.id;
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [scrollRequest, highlightedLines, isLoading, isHighlighting]);
 
   const activeSelection = useMemo(() => {
     if (selectedLines) return selectedLines;

@@ -7,6 +7,7 @@ import { ServerOffline } from '../ServerOffline';
 import { LiteHeader } from './LiteHeader';
 import { LiteSidebar } from './LiteSidebar';
 import { useFileWatcher } from '../../hooks/useFileWatcher';
+import type { ScrollRequest } from '../../types';
 import layoutStyles from '../Layout/Layout.module.css';
 
 function isMarkdownFile(path: string): boolean {
@@ -15,6 +16,7 @@ function isMarkdownFile(path: string): boolean {
 }
 
 let commentIdCounter = 0;
+let scrollRequestCounter = 0;
 
 interface LiteAppProps {
   /** Project-relative path of the single file this scout instance serves */
@@ -30,6 +32,7 @@ export function LiteApp({ initialFile }: LiteAppProps) {
   const [markdownCodeView, setMarkdownCodeView] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ startLine: number; endLine: number } | null>(null);
+  const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
 
   // Connect to the file watcher so edits on disk refresh the content
   const { connected } = useFileWatcher(initialFile);
@@ -46,6 +49,15 @@ export function LiteApp({ initialFile }: LiteAppProps) {
   const handleAddComment = useCallback((comment: Omit<Comment, 'id'>) => {
     const id = `comment-${++commentIdCounter}`;
     setComments((prev) => [...prev, { ...comment, id }]);
+  }, []);
+
+  const handleUpdateComment = useCallback((id: string, body: string) => {
+    setComments((prev) => prev.map((c) => (c.id === id ? { ...c, body } : c)));
+  }, []);
+
+  // Scout serves a single file, so jumping to a comment only needs to scroll
+  const handleJumpToComment = useCallback((comment: Comment) => {
+    setScrollRequest({ id: ++scrollRequestCounter, startLine: comment.startLine, endLine: comment.endLine });
   }, []);
 
   const handleDeleteComment = useCallback((id: string) => {
@@ -98,8 +110,10 @@ export function LiteApp({ initialFile }: LiteAppProps) {
                 comments={comments}
                 currentFile={initialFile}
                 onAddComment={handleAddComment}
+                onUpdateComment={handleUpdateComment}
                 onDeleteComment={handleDeleteComment}
                 onClearAll={handleClearAll}
+                onJumpToComment={handleJumpToComment}
                 pendingSelection={pendingSelection}
                 onCancelSelection={handleCancelSelection}
               />
@@ -113,6 +127,7 @@ export function LiteApp({ initialFile }: LiteAppProps) {
               selectedLines={pendingSelection}
               onLineSelectionComplete={handleLineSelectionComplete}
               commentRanges={commentRanges}
+              scrollRequest={scrollRequest}
             />
           ) : (
             <CodeViewer
@@ -121,6 +136,7 @@ export function LiteApp({ initialFile }: LiteAppProps) {
               selectedLines={pendingSelection}
               onLineSelectionComplete={handleLineSelectionComplete}
               commentedLines={commentedLines}
+              scrollRequest={scrollRequest}
             />
           )}
         </div>

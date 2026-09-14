@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, ReactNode } from 'react';
+import { useState, useCallback, useEffect, ReactNode } from 'react';
 import { FolderTree, GitBranch, MessageSquare, PanelLeftClose, Play, Search } from 'lucide-react';
 import { FileTree } from '../FileTree';
 import { GitChangedFiles } from '../GitChangedFiles';
@@ -6,6 +6,7 @@ import { SearchPanel } from '../SearchPanel';
 import { useScripts } from '../ScriptsPanel';
 import { useChangedFiles } from '../../hooks/useGitStatus';
 import { useDiffBase } from '../../hooks/useDiffBase';
+import { useSidebarResize } from './useSidebarResize';
 import styles from './Sidebar.module.css';
 
 type TabType = 'explorer' | 'search' | 'source-control' | 'comments' | 'scripts';
@@ -27,10 +28,8 @@ export function Sidebar({ onFileSelect, onOpenAtLine, selectedFile, commentCount
   const [activeTab, setActiveTab] = useState<TabType>('explorer');
   const [collapsed, setCollapsed] = useState(false);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
-  const [contentWidth, setContentWidth] = useState(260);
-  const [resizing, setResizing] = useState(false);
+  const { contentWidth, resizing, handleResizeStart } = useSidebarResize();
   const [ctrlHeld, setCtrlHeld] = useState(false);
-  const dragging = useRef(false);
   const { baseRef } = useDiffBase();
   const { data: changedFiles } = useChangedFiles(baseRef);
   const changedCount = changedFiles ? Object.keys(changedFiles).length : 0;
@@ -52,14 +51,6 @@ export function Sidebar({ onFileSelect, onOpenAtLine, selectedFile, commentCount
       setCollapsed(false);
     }
   }, [activeTab, collapsed]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    setResizing(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, []);
 
   useEffect(() => {
     const tabs: Record<string, TabType> = { '1': 'explorer', '2': 'search', '3': 'source-control', '4': 'comments', '5': 'scripts' };
@@ -103,29 +94,6 @@ export function Sidebar({ onFileSelect, onOpenAtLine, selectedFile, commentCount
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!dragging.current) return;
-      // 44px is approximately the tab bar width
-      const newWidth = Math.max(150, Math.min(600, e.clientX - 44));
-      setContentWidth(newWidth);
-    };
-    const handleMouseUp = () => {
-      if (dragging.current) {
-        dragging.current = false;
-        setResizing(false);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
   }, []);
 
   return (
@@ -201,7 +169,7 @@ export function Sidebar({ onFileSelect, onOpenAtLine, selectedFile, commentCount
           {!collapsed && activeTab === 'comments' && commentPanel}
           {!collapsed && activeTab === 'scripts' && scriptsPanel}
         </div>
-        <div className={styles.resizeHandle} onMouseDown={handleMouseDown} />
+        <div className={styles.resizeHandle} onMouseDown={handleResizeStart} />
       </div>
     </div>
   );
