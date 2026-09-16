@@ -161,6 +161,22 @@
   margin-bottom: 4px;
 }
 
+/* Flash shown when a commented line is clicked in the viewer */
+.commentFlash {
+  animation: commentFlash 2s ease-out;
+}
+
+@keyframes commentFlash {
+  0%, 25% {
+    background: rgba(94, 234, 212, 0.18);
+    border-color: var(--text-accent);
+  }
+  100% {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+  }
+}
+
 .commentHeader {
   display: flex;
   align-items: center;

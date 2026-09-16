@@ -1,2 +1,2 @@
-export { CommentPanel } from './CommentPanel';
-export type { Comment } from './CommentPanel';
+export { CommentPanel, findCommentForRange } from './CommentPanel';
+export type { Comment, CommentHighlight } from './CommentPanel';

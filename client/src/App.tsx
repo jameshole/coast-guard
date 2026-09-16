@@ -7,7 +7,8 @@ import { MarkdownViewer } from './components/MarkdownViewer';
 import { CommandPalette } from './components/CommandPalette';
 import { DefinitionPicker } from './components/DefinitionPicker';
 import { CommentPanel } from './components/CommentPanel';
-import type { Comment } from './components/CommentPanel';
+import type { Comment, CommentHighlight } from './components/CommentPanel';
+import { findCommentForRange } from './components/CommentPanel';
 import { ClaudeView, ClaudeProvider } from './components/ClaudeView';
 import { ScriptsProvider, ScriptsPanel } from './components/ScriptsPanel';
 import { LiteApp } from './components/Lite';
@@ -50,6 +51,7 @@ function urlToFile(pathname: string): string | null {
 
 let commentIdCounter = 0;
 let scrollRequestCounter = 0;
+let highlightNonceCounter = 0;
 
 function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(() =>
@@ -63,6 +65,7 @@ function AppContent() {
   const [pendingSelection, setPendingSelection] = useState<{ startLine: number; endLine: number } | null>(null);
   const [targetLine, setTargetLine] = useState<number | null>(null);
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
+  const [commentHighlight, setCommentHighlight] = useState<CommentHighlight | null>(null);
   const [definitionResults, setDefinitionResults] = useState<DefinitionResult[]>([]);
   const [definitionSymbol, setDefinitionSymbol] = useState('');
   const [isDefinitionPickerOpen, setIsDefinitionPickerOpen] = useState(false);
@@ -181,9 +184,17 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mainView]);
 
+  // Selecting lines that an existing comment already covers points at that
+  // comment (scroll + flash in the sidebar) instead of starting a duplicate.
   const handleLineSelectionComplete = useCallback((startLine: number, endLine: number) => {
+    const existing = findCommentForRange(comments, selectedFile, startLine, endLine);
+    if (existing) {
+      setPendingSelection(null);
+      setCommentHighlight({ id: existing.id, nonce: ++highlightNonceCounter });
+      return;
+    }
     setPendingSelection({ startLine, endLine });
-  }, []);
+  }, [comments, selectedFile]);
 
   const handleAddComment = useCallback((comment: Omit<Comment, 'id'>) => {
     const id = `comment-${++commentIdCounter}`;
@@ -303,6 +314,7 @@ function AppContent() {
             selectedFile={selectedFile}
             commentCount={comments.length}
             pendingSelection={pendingSelection}
+            commentHighlight={commentHighlight}
             shortcutsEnabled={mainView === 'editor'}
             commentPanel={
               <CommentPanel
@@ -313,6 +325,7 @@ function AppContent() {
                 onDeleteComment={handleDeleteComment}
                 onClearAll={handleClearAll}
                 onJumpToComment={handleJumpToComment}
+                highlight={commentHighlight}
                 onFocusClaude={() => setMainView('claude')}
                 pendingSelection={pendingSelection}
                 onCancelSelection={handleCancelSelection}

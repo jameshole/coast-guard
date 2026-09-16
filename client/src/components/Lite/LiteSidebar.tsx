@@ -7,10 +7,12 @@ interface LiteSidebarProps {
   commentCount: number;
   commentPanel: ReactNode;
   pendingSelection: { startLine: number; endLine: number } | null;
+  /** Set when a commented line is clicked; expands the panel on the flashed comment. */
+  commentHighlight: { id: string; nonce: number } | null;
 }
 
 /** Comments-only sidebar for the scout single-file app. */
-export function LiteSidebar({ commentCount, commentPanel, pendingSelection }: LiteSidebarProps) {
+export function LiteSidebar({ commentCount, commentPanel, pendingSelection, commentHighlight }: LiteSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { contentWidth, resizing, handleResizeStart } = useSidebarResize();
 
@@ -18,6 +20,11 @@ export function LiteSidebar({ commentCount, commentPanel, pendingSelection }: Li
   useEffect(() => {
     if (pendingSelection) setCollapsed(false);
   }, [pendingSelection]);
+
+  // Same for revealing the existing comment on an already-commented line
+  useEffect(() => {
+    if (commentHighlight) setCollapsed(false);
+  }, [commentHighlight]);
 
   return (
     <div className={styles.sidebar}>

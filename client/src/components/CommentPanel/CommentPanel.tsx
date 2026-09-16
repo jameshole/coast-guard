@@ -11,6 +11,38 @@ export interface Comment {
   body: string;
 }
 
+/** A request to scroll to a comment and flash it; `nonce` retriggers on repeat clicks. */
+export interface CommentHighlight {
+  id: string;
+  nonce: number;
+}
+
+/**
+ * The comment a line selection lands inside, if any: the innermost comment in
+ * `filePath` whose range fully contains the selection. Clicking such a line
+ * points at the existing comment rather than starting a duplicate one.
+ */
+export function findCommentForRange(
+  comments: Comment[],
+  filePath: string | null,
+  startLine: number,
+  endLine: number,
+): Comment | null {
+  let best: Comment | null = null;
+  let bestSpan = Infinity;
+  for (const c of comments) {
+    if (c.filePath !== filePath) continue;
+    if (c.startLine <= startLine && endLine <= c.endLine) {
+      const span = c.endLine - c.startLine;
+      if (span < bestSpan) {
+        best = c;
+        bestSpan = span;
+      }
+    }
+  }
+  return best;
+}
+
 type SortOrder = 'newest' | 'oldest' | 'top' | 'bottom';
 
 const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
@@ -21,6 +53,9 @@ const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
 ];
 
 const SORT_ORDER_KEY = 'coast-guard:comment-sort-order';
+
+/** Keep in sync with the commentFlash animation in CommentPanel.module.css */
+const FLASH_DURATION_MS = 2000;
 
 function loadSortOrder(): SortOrder {
   try {
@@ -43,6 +78,8 @@ interface CommentPanelProps {
   onJumpToComment: (comment: Comment) => void;
   /** Bring the Claude chat view into focus (used by the Send action). Omitted in the lite app, which has no Claude chat. */
   onFocusClaude?: () => void;
+  /** Scroll to a comment and flash it (set when a commented line is clicked) */
+  highlight?: CommentHighlight | null;
   /** When set, shows the "add comment" form for this line range */
   pendingSelection: { startLine: number; endLine: number } | null;
   onCancelSelection: () => void;
@@ -84,12 +121,30 @@ interface CommentCardProps {
   onUpdate: (id: string, body: string) => void;
   onDelete: (id: string) => void;
   onJump: (comment: Comment) => void;
+  /** Changes each time this card should be scrolled to and flashed */
+  highlightNonce?: number;
 }
 
-function CommentCard({ comment, onUpdate, onDelete, onJump }: CommentCardProps) {
+function CommentCard({ comment, onUpdate, onDelete, onJump, highlightNonce }: CommentCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
+  const [flashing, setFlashing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Scroll this card into the sidebar's view and flash it. Clearing the class
+  // for a frame first restarts the animation when the same card is re-clicked.
+  useEffect(() => {
+    if (highlightNonce === undefined) return;
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setFlashing(false);
+    const frame = requestAnimationFrame(() => setFlashing(true));
+    const timer = window.setTimeout(() => setFlashing(false), FLASH_DURATION_MS);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [highlightNonce]);
 
   // Focus with the caret at the end rather than selecting nothing at the start
   useEffect(() => {
@@ -124,7 +179,7 @@ function CommentCard({ comment, onUpdate, onDelete, onJump }: CommentCardProps) 
   };
 
   return (
-    <div className={styles.comment}>
+    <div ref={cardRef} className={`${styles.comment} ${flashing ? styles.commentFlash : ''}`}>
       <div className={styles.commentHeader}>
         <button
           className={styles.lineRange}
@@ -168,6 +223,7 @@ export function CommentPanel({
   onDeleteComment,
   onClearAll,
   onJumpToComment,
+  highlight,
   onFocusClaude,
   pendingSelection,
   onCancelSelection,
@@ -241,6 +297,7 @@ export function CommentPanel({
       onUpdate={onUpdateComment}
       onDelete={onDeleteComment}
       onJump={onJumpToComment}
+      highlightNonce={highlight?.id === comment.id ? highlight.nonce : undefined}
     />
   );
 

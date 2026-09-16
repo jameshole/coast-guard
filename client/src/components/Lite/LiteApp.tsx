@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { CodeViewer } from '../CodeViewer';
 import { MarkdownViewer } from '../MarkdownViewer';
 import { CommentPanel } from '../CommentPanel';
-import type { Comment } from '../CommentPanel';
+import type { Comment, CommentHighlight } from '../CommentPanel';
+import { findCommentForRange } from '../CommentPanel';
 import { ServerOffline } from '../ServerOffline';
 import { LiteHeader } from './LiteHeader';
 import { LiteSidebar } from './LiteSidebar';
@@ -17,6 +18,7 @@ function isMarkdownFile(path: string): boolean {
 
 let commentIdCounter = 0;
 let scrollRequestCounter = 0;
+let highlightNonceCounter = 0;
 
 interface LiteAppProps {
   /** Project-relative path of the single file this scout instance serves */
@@ -33,6 +35,7 @@ export function LiteApp({ initialFile }: LiteAppProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ startLine: number; endLine: number } | null>(null);
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
+  const [commentHighlight, setCommentHighlight] = useState<CommentHighlight | null>(null);
 
   // Connect to the file watcher so edits on disk refresh the content
   const { connected } = useFileWatcher(initialFile);
@@ -42,9 +45,17 @@ export function LiteApp({ initialFile }: LiteAppProps) {
     document.title = `${fileName} | scout`;
   }, [initialFile]);
 
+  // Selecting lines that an existing comment already covers points at that
+  // comment (scroll + flash in the sidebar) instead of starting a duplicate.
   const handleLineSelectionComplete = useCallback((startLine: number, endLine: number) => {
+    const existing = findCommentForRange(comments, initialFile, startLine, endLine);
+    if (existing) {
+      setPendingSelection(null);
+      setCommentHighlight({ id: existing.id, nonce: ++highlightNonceCounter });
+      return;
+    }
     setPendingSelection({ startLine, endLine });
-  }, []);
+  }, [comments, initialFile]);
 
   const handleAddComment = useCallback((comment: Omit<Comment, 'id'>) => {
     const id = `comment-${++commentIdCounter}`;
@@ -105,6 +116,7 @@ export function LiteApp({ initialFile }: LiteAppProps) {
           <LiteSidebar
             commentCount={comments.length}
             pendingSelection={pendingSelection}
+            commentHighlight={commentHighlight}
             commentPanel={
               <CommentPanel
                 comments={comments}
@@ -114,6 +126,7 @@ export function LiteApp({ initialFile }: LiteAppProps) {
                 onDeleteComment={handleDeleteComment}
                 onClearAll={handleClearAll}
                 onJumpToComment={handleJumpToComment}
+                highlight={commentHighlight}
                 pendingSelection={pendingSelection}
                 onCancelSelection={handleCancelSelection}
               />

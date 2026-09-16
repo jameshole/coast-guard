@@ -20,11 +20,13 @@ interface SidebarProps {
   commentPanel: ReactNode;
   scriptsPanel: ReactNode;
   pendingSelection: { startLine: number; endLine: number } | null;
+  /** Set when a commented line is clicked; opens the comments tab on the flashed comment. */
+  commentHighlight: { id: string; nonce: number } | null;
   /** Whether plain-character shortcuts (j/k file navigation) may fire. */
   shortcutsEnabled: boolean;
 }
 
-export function Sidebar({ onFileSelect, onOpenAtLine, selectedFile, commentCount, commentPanel, scriptsPanel, pendingSelection, shortcutsEnabled }: SidebarProps) {
+export function Sidebar({ onFileSelect, onOpenAtLine, selectedFile, commentCount, commentPanel, scriptsPanel, pendingSelection, commentHighlight, shortcutsEnabled }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>('explorer');
   const [collapsed, setCollapsed] = useState(false);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
@@ -42,6 +44,15 @@ export function Sidebar({ onFileSelect, onOpenAtLine, selectedFile, commentCount
       setCollapsed(false);
     }
   }, [pendingSelection]);
+
+  // Clicking an already-commented line reveals that comment, so the panel has
+  // to be open for the scroll-and-flash to be visible.
+  useEffect(() => {
+    if (commentHighlight) {
+      setActiveTab('comments');
+      setCollapsed(false);
+    }
+  }, [commentHighlight]);
 
   const handleTabClick = useCallback((tab: TabType) => {
     if (activeTab === tab && !collapsed) {
