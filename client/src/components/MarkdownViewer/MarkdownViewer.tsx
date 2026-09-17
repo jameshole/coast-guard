@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useFileContent } from '../../hooks/useFileContent';
 import { api } from '../../services/api';
 import { FindBar, useFindBarState, createFindMatcher, FIND_MATCH_LIMIT } from '../FindBar';
+import { TableOfContents, extractHeadings } from './TableOfContents';
 import type { ScrollRequest } from '../../types';
 import styles from './MarkdownViewer.module.css';
 
@@ -15,6 +16,18 @@ import styles from './MarkdownViewer.module.css';
 // so it can't conflict with React's rendering of the markdown tree.
 const FIND_HIGHLIGHT = 'coast-guard-find';
 const FIND_ACTIVE_HIGHLIGHT = 'coast-guard-find-active';
+
+// Remembered across files and sessions, so the contents panel stays where the
+// reader left it.
+const TOC_STORAGE_KEY = 'coast-guard:markdown-toc-open';
+
+function readTocPreference(): boolean {
+  try {
+    return window.localStorage.getItem(TOC_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
 
 function cssHighlights(): Map<string, unknown> | undefined {
   return (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
@@ -394,6 +407,18 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
 
   const content = fileData?.content || '';
 
+  const headings = useMemo(() => extractHeadings(content), [content]);
+  const [tocOpen, setTocOpen] = useState(readTocPreference);
+
+  const handleTocToggle = useCallback((open: boolean) => {
+    setTocOpen(open);
+    try {
+      window.localStorage.setItem(TOC_STORAGE_KEY, String(open));
+    } catch {
+      // Private browsing or a blocked store; the panel just won't be remembered
+    }
+  }, []);
+
   // Scroll to a requested line range. Each request is handled once, as soon as
   // a matching element is rendered, so live content refreshes don't re-scroll.
   const handledScrollId = useRef<number | null>(null);
@@ -619,6 +644,13 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
         capped={findRanges.length >= FIND_MATCH_LIMIT}
         onNavigate={navigateFind}
       />
+    <TableOfContents
+      headings={headings}
+      containerRef={containerRef}
+      contentVersion={content}
+      open={tocOpen}
+      onToggle={handleTocToggle}
+    />
     <div className={styles.container} ref={containerRef}>
       <article className={styles.article}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>

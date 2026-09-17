@@ -1,4 +1,9 @@
 .viewerRoot {
+  --md-toc-width: 248px;
+  /* Right edge of the contents list, hugging the gutter beside the centred
+     article (half of .article's 900px max-width, plus a gap). It clamps to the
+     pane edge when the pane is too narrow for the article to have a gutter. */
+  --md-toc-left: max(8px, calc(50% - 450px - 16px - var(--md-toc-width)));
   position: relative;
   height: 100%;
 }
@@ -282,6 +287,8 @@
 /* Selectable blocks for commenting */
 .selectableBlock {
   position: relative;
+  /* Keeps a heading clear of the top edge when jumped to from the contents */
+  scroll-margin-top: 16px;
   border-radius: 4px;
   padding: 2px 4px;
   margin: -2px -4px;
@@ -345,4 +352,143 @@
 
 .error {
   color: var(--diff-staged-remove);
+}
+
+/* Contents list — floats in the left gutter, no chrome of its own. The nav
+   itself ignores the pointer so the markdown underneath stays clickable;
+   only the list and its controls take clicks. */
+.toc {
+  position: absolute;
+  top: 0;
+  left: var(--md-toc-left);
+  bottom: 0;
+  z-index: 15;
+  width: var(--md-toc-width);
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.tocHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 6px 8px 14px;
+  pointer-events: auto;
+}
+
+.tocTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tocCollapse,
+.tocOpenButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.tocCollapse:hover,
+.tocOpenButton:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tocOpenButton {
+  position: absolute;
+  top: 10px;
+  left: var(--md-toc-left);
+  margin-left: 12px;
+  z-index: 15;
+  padding: 4px;
+  opacity: 0.5;
+  transition: opacity 0.12s ease;
+}
+
+.tocOpenButton:hover {
+  opacity: 1;
+}
+
+/* Only as tall as its entries, so the empty gutter below stays click-through */
+.tocList {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 2px 0 16px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+/* The scrollbar would be the only chrome on an otherwise bare list, so it only
+   shows while the list is being used, then fades. */
+.tocList:hover,
+.tocList:focus-within,
+.tocListScrolling {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.tocList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tocList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tocList::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.4s ease;
+}
+
+.tocList:hover::-webkit-scrollbar-thumb,
+.tocList:focus-within::-webkit-scrollbar-thumb,
+.tocListScrolling::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+.tocItem {
+  display: block;
+  width: 100%;
+  padding: 3px 10px 3px 8px;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: color 0.4s ease, background 0.4s ease, border-left-color 0.4s ease;
+}
+
+.tocItem:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tocItemActive,
+.tocItemActive:hover {
+  color: var(--text-accent);
+  background: var(--bg-selected);
+  border-left-color: var(--text-accent);
 }
