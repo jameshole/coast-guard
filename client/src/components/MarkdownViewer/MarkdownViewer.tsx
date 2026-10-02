@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Copy, Check } from 'lucide-react';
@@ -340,47 +340,53 @@ function makeSelectableComponent(
   selectedLines?: LineRange | null,
   commentRanges?: LineRange[],
 ) {
-  // <li> can't be wrapped in a <div> (invalid HTML inside <ul>/<ol>), so apply the
-  // selectable behavior directly to the <li> element itself.
-  if (Tag === 'li') {
-    return function SelectableLi({ node, children, className, ...props }: any) {
+  // <li> and <tr> can't be wrapped in a <div> (invalid HTML inside <ul>/<ol> and
+  // <thead>/<tbody>), so apply the selectable behavior directly to the element itself.
+  if (Tag === 'li' || Tag === 'tr') {
+    const isRow = Tag === 'tr';
+
+    return function SelectableElement({ node, children, className, ...props }: any) {
       const startLine = node?.position?.start?.line;
       const endLine = node?.position?.end?.line;
 
       if (!startLine || !endLine) {
-        return <li className={className} {...props}>{children}</li>;
+        return <Tag className={className} {...props}>{children}</Tag>;
       }
 
       const isSelected = matchesRange(startLine, endLine, selectedLines);
       const hasComment = !!commentRanges?.some((r) => matchesRange(startLine, endLine, r));
+      const label = startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`;
 
+      // A <tr> takes no padding or margin and its cells paint over its background,
+      // so rows get their own classes that style the cells instead.
       const combinedClassName = [
         className,
-        styles.selectableBlock,
-        isSelected ? styles.selectedBlock : '',
-        hasComment ? styles.commentedBlock : '',
+        isRow ? styles.selectableRow : styles.selectableBlock,
+        isSelected ? (isRow ? styles.selectedRow : styles.selectedBlock) : '',
+        hasComment ? (isRow ? styles.commentedRow : styles.commentedBlock) : '',
       ]
         .filter(Boolean)
         .join(' ');
 
       return (
-        <li
+        <Tag
           {...props}
           data-start-line={startLine}
           data-end-line={endLine}
           className={combinedClassName}
-          onClick={(e) => {
+          // A <span> can't be a child of a <tr>, so the row's label is drawn by CSS from this
+          style={isRow ? { ...props.style, '--line-label': `"${label}"` } : props.style}
+          onClick={(e: MouseEvent<HTMLElement>) => {
             if ((e.target as HTMLElement).closest('input, a')) return;
-            // Stop bubbling so the parent <ul>/<ol> (or an ancestor <li>) doesn't overwrite this selection
+            // Stop bubbling so the enclosing block (the parent list or table, or an
+            // ancestor <li>) doesn't overwrite this selection
             e.stopPropagation();
             onSelect?.(startLine, endLine);
           }}
         >
-          <span className={styles.lineLabel}>
-            {startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`}
-          </span>
+          {!isRow && <span className={styles.lineLabel}>{label}</span>}
           {children}
-        </li>
+        </Tag>
       );
     };
   }
@@ -557,7 +563,7 @@ export function MarkdownViewer({ filePath, onLineSelectionComplete, selectedLine
   // tree on every render — wasteful, and an infinite loop with the find
   // MutationObserver above (mutation → recompute → re-render → mutation).
   const markdownComponents = useMemo(() => {
-    const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'table', 'hr'] as const;
+    const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'table', 'tr', 'hr'] as const;
     const selectableComponents: Record<string, any> = {};
     for (const tag of blockTags) {
       selectableComponents[tag] = makeSelectableComponent(tag, onLineSelectionComplete, selectedLines, commentRanges);

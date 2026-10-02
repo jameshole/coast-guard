@@ -304,13 +304,13 @@
   opacity: 1;
 }
 
-/* When a nested selectable block is hovered, suppress the ancestor's hover styling
-   so only the innermost block under the cursor gets highlighted. */
-.selectableBlock:hover:has(.selectableBlock:hover) {
+/* When a nested selectable block (or table row) is hovered, suppress the ancestor's
+   hover styling so only the innermost block under the cursor gets highlighted. */
+.selectableBlock:hover:has(.selectableBlock:hover, .selectableRow:hover) {
   background: transparent;
 }
 
-.selectableBlock:hover:has(.selectableBlock:hover) > .lineLabel {
+.selectableBlock:hover:has(.selectableBlock:hover, .selectableRow:hover) > .lineLabel {
   opacity: 0;
 }
 
@@ -325,7 +325,8 @@
   margin-left: -8px;
 }
 
-.lineLabel {
+.lineLabel,
+.selectableRow > :last-child::after {
   position: absolute;
   right: -4px;
   top: 2px;
@@ -338,6 +339,52 @@
   pointer-events: none;
   white-space: nowrap;
   padding-left: 8px;
+}
+
+/* Selectable table rows. The states are tints layered onto the cells (as a
+   background image) so the zebra striping and header shading underneath
+   still show through. */
+.selectableRow {
+  scroll-margin-top: 16px;
+  cursor: pointer;
+}
+
+.selectableRow > * {
+  transition: background 0.1s;
+}
+
+.commentedRow > * {
+  background-image: linear-gradient(rgba(79, 193, 255, 0.07), rgba(79, 193, 255, 0.07));
+}
+
+.commentedRow > :first-child {
+  box-shadow: inset 2px 0 0 var(--text-accent);
+}
+
+.selectableRow:hover > * {
+  background-image: linear-gradient(rgba(79, 193, 255, 0.08), rgba(79, 193, 255, 0.08));
+}
+
+.selectedRow > * {
+  background-image: linear-gradient(rgba(79, 193, 255, 0.15), rgba(79, 193, 255, 0.15)) !important;
+}
+
+/* The row's line label hangs off its last cell, lined up with the block labels
+   and centred on the row */
+.selectableRow > :last-child {
+  position: relative;
+}
+
+.selectableRow > :last-child::after {
+  content: var(--line-label);
+  right: -8px;
+  top: 50%;
+  transform: translate(100%, -50%);
+  font-weight: normal;
+}
+
+.selectableRow:hover > :last-child::after {
+  opacity: 1;
 }
 
 /* Loading/Error states */
