@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { CodeViewer } from '../CodeViewer';
 import { MarkdownViewer } from '../MarkdownViewer';
+import { ImageViewer } from '../ImageViewer';
+import { isImageFile, isSvgFile } from '../../utils/fileTypes';
 import { CommentPanel } from '../CommentPanel';
 import type { Comment, CommentHighlight } from '../CommentPanel';
 import { findCommentForRange } from '../CommentPanel';
@@ -134,7 +136,9 @@ export function LiteApp({ initialFile }: LiteAppProps) {
           />
         </div>
         <div className={layoutStyles.main}>
-          {isMarkdownFile(initialFile) && !markdownCodeView ? (
+          {isImageFile(initialFile) && !(isSvgFile(initialFile) && markdownCodeView) ? (
+            <ImageViewer filePath={initialFile} />
+          ) : isMarkdownFile(initialFile) && !markdownCodeView ? (
             <MarkdownViewer
               filePath={initialFile}
               selectedLines={pendingSelection}

@@ -35,6 +35,9 @@ export const api = {
   getFileContent: (path: string): Promise<{ content: string }> =>
     fetchJSON(`/files/content?path=${encodeURIComponent(path)}`),
 
+  getRawFileUrl: (path: string): string =>
+    `${API_BASE}/files/raw?path=${encodeURIComponent(path)}`,
+
   getAllFiles: (): Promise<string[]> => fetchJSON('/files/all'),
 
   searchFiles: (query: string, regex: boolean, caseSensitive: boolean): Promise<SearchResponse> =>

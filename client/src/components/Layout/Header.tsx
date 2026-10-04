@@ -5,6 +5,7 @@ import { useGitBranch, useGitCheck } from '../../hooks/useGitStatus';
 import { useGitWatchEnabled, useToggleGitWatch } from '../../hooks/useSettings';
 import { useClaude } from '../ClaudeView';
 import { isTypingTarget } from '../../utils/keyboard';
+import { isImageFile, isSvgFile } from '../../utils/fileTypes';
 import styles from './Header.module.css';
 
 function isMarkdownFile(path: string): boolean {
@@ -135,7 +136,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
 
       <div className={styles.spacer} />
 
-      {currentFile && isMarkdownFile(currentFile) && (
+      {currentFile && (isMarkdownFile(currentFile) || isSvgFile(currentFile)) && (
         <div className={styles.viewToggle}>
           <button
             className={`${styles.viewToggleButton} ${!markdownCodeView ? styles.viewToggleButtonActive : ''}`}
@@ -186,7 +187,7 @@ export function Header({ currentFile, ignoreWhitespace, onToggleWhitespace, show
         </div>
       )}
 
-      {gitCheck?.isGitRepo && currentFile && mainView === 'editor' && (!isMarkdownFile(currentFile) || markdownCodeView) && (
+      {gitCheck?.isGitRepo && currentFile && mainView === 'editor' && ((!isMarkdownFile(currentFile) && !isImageFile(currentFile)) || markdownCodeView) && (
         <div className={styles.diffNav}>
           <button
             className={`${styles.diffNavButton} ${showBlame ? styles.diffNavButtonActive : ''}`}

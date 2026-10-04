@@ -1,5 +1,6 @@
 import { FileText, ExternalLink, Eye, Code, Compass } from 'lucide-react';
 import { useProjectInfo } from '../../hooks/useFileTree';
+import { isSvgFile } from '../../utils/fileTypes';
 import styles from '../Layout/Header.module.css';
 
 function isMarkdownFile(path: string): boolean {
@@ -40,7 +41,7 @@ export function LiteHeader({ filePath, markdownCodeView, onToggleMarkdownCodeVie
 
       <div className={styles.spacer} />
 
-      {isMarkdownFile(filePath) && (
+      {(isMarkdownFile(filePath) || isSvgFile(filePath)) && (
         <div className={styles.viewToggle}>
           <button
             className={`${styles.viewToggleButton} ${!markdownCodeView ? styles.viewToggleButtonActive : ''}`}

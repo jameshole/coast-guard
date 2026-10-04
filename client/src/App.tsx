@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { CodeViewer } from './components/CodeViewer';
 import { MarkdownViewer } from './components/MarkdownViewer';
+import { ImageViewer } from './components/ImageViewer';
 import { CommandPalette } from './components/CommandPalette';
 import { DefinitionPicker } from './components/DefinitionPicker';
 import { CommentPanel } from './components/CommentPanel';
@@ -16,6 +17,7 @@ import { ServerOffline } from './components/ServerOffline';
 import type { DefinitionResult, ScrollRequest } from './types';
 import { api } from './services/api';
 import { isTypingTarget } from './utils/keyboard';
+import { isImageFile, isSvgFile } from './utils/fileTypes';
 import { useFileWatcher } from './hooks/useFileWatcher';
 import { useProjectInfo } from './hooks/useFileTree';
 import { DiffBaseProvider } from './hooks/useDiffBase';
@@ -270,6 +272,10 @@ function AppContent() {
 
     if (!selectedFile) {
       return <CodeViewer filePath={null} />;
+    }
+
+    if (isImageFile(selectedFile) && !(isSvgFile(selectedFile) && markdownCodeView)) {
+      return <ImageViewer filePath={selectedFile} />;
     }
 
     if (isMarkdownFile(selectedFile) && !markdownCodeView) {

@@ -1,0 +1,92 @@
+.container {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.stage {
+  flex: 1;
+  display: flex;
+  padding: 24px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.image {
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  /* Checkerboard so transparent regions are visible against the dark theme */
+  background-color: #1c2128;
+  background-image:
+    linear-gradient(45deg, #2d333b 25%, transparent 25%, transparent 75%, #2d333b 75%),
+    linear-gradient(45deg, #2d333b 25%, transparent 25%, transparent 75%, #2d333b 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+.imageZoomed {
+  max-width: none;
+  max-height: none;
+  flex-shrink: 0;
+}
+
+.meta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.zoomControls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoomButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.zoomButton:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.zoomButtonActive {
+  color: var(--text-accent);
+}
+
+.zoomLevel {
+  min-width: 44px;
+  text-align: center;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--diff-staged-remove);
+}

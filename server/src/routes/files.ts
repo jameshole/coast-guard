@@ -37,6 +37,32 @@ export function createFilesRouter(fileService: FileService, tsService: TypeScrip
     }
   });
 
+  // Get raw file bytes (used to render images)
+  router.get('/raw', async (req: Request, res: Response) => {
+    try {
+      const path = req.query.path as string;
+
+      if (!path) {
+        res.status(400).json({ error: 'Path is required' });
+        return;
+      }
+
+      const absolutePath = await fileService.resolveFile(path);
+      // SVGs can carry scripts; keep them inert if the URL is opened directly
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(absolutePath, { dotfiles: 'allow' }, (error) => {
+        if (error && !res.headersSent) {
+          res.status(400).json({ error: error.message });
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(400).json({ error: message });
+    }
+  });
+
   // Get all files (for search)
   router.get('/all', async (_req: Request, res: Response) => {
     try {

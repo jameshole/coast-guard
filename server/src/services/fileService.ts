@@ -114,6 +114,24 @@ export class FileService {
     }
   }
 
+  /** Resolve a project-relative path to an absolute one, for serving the file's raw bytes. */
+  async resolveFile(relativePath: string): Promise<string> {
+    const absolutePath = this.validatePath(relativePath);
+
+    try {
+      const stats = await fs.stat(absolutePath);
+      if (!stats.isFile()) {
+        throw new Error(`Not a file: ${relativePath}`);
+      }
+      return absolutePath;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`File not found: ${relativePath}`);
+      }
+      throw error;
+    }
+  }
+
   async toggleCheckbox(relativePath: string, checkboxIndex: number): Promise<string> {
     // Only allow markdown files
     if (!relativePath.endsWith('.md') && !relativePath.endsWith('.markdown')) {
